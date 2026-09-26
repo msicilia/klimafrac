@@ -1,0 +1,14 @@
+# Secrets and environments
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Run logs
+logs/
+
+# Fetched data, derived results and figures are rebuilt by the pipeline
+data/
+figures/
+.ruff_cache/

@@ -1,0 +1,28 @@
+[project]
+name = "klimafrac"
+version = "1.0.0"
+description = "Code for 'Thin Trading and the Singularity Spectrum: Evidence from Tokenized Carbon Markets'"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Alberto Ballesteros-Rodríguez", email = "alberto.ballesterosr@uah.es" },
+    { name = "Lino González-García", email = "lino.gonzalez@uah.es" },
+    { name = "Miguel-Angel Sicilia", email = "msicilia@uah.es" },
+]
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.11.1",
+    "numpy>=2.5.1",
+    "pandas>=3.0.5",
+    "pycryptodome>=3.23.0",
+    "requests>=2.34.2",
+    "scipy>=1.18.0",
+    "statsmodels>=0.14.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/klimafrac"]
