@@ -1,7 +1,9 @@
 """
 Carbon tokens against conventional crypto: the asset-class gap in the
-positive-q spectrum, what data construction contributes to it and how much
-the design can resolve (paper Section 4.3, Table 4 and Figure 1).
+positive-q spectrum, what data construction contributes to it, how much the
+design can resolve, and the price paths behind it (paper abstract and
+Introduction; Section 4.2.5 "Between asset classes" with Table
+tab:contrasts and Figures fig5_prices and fig6_comparative; Conclusions).
 
 Series. Nine hourly series in three groups:
   carbon        BCT, NCT, MCO2, KLIMA, reconstructed from their Polygon
@@ -28,14 +30,14 @@ Vendor missing bars. The vendor returns nothing for some instants (listed in
 data/vendor_manifest.json). They are forward-filled on the complete grid, so
 every window is 4,000 consecutive hours as on the reconstructed side, and
 each window records how many filled bars its prices touch. Differencing only
-the priced bars instead would stitch 4,000 "hourly" returns across holes.
-Every contrast is repeated with the aggregated
+the priced bars instead would silently stitch 4,000 "hourly" returns across
+holes of up to 11 hours. Every contrast is repeated with the aggregated
 windows that touch a filled bar dropped, and the number dropped is reported.
 
 Staleness restriction. A reconstructed window is kept under a restriction
 when its no-trade fraction -- the share of its hours flagged no_trade from
 the trades themselves -- is at most 0.30 (the tolerance derived in Section
-3.4) or 0.05. The fraction of zero returns is not used: an hour whose
+4.1.2) or 0.05. The fraction of zero returns is not used: an hour whose
 trades leave the price unchanged is not an hour without trading. An
 aggregated series has no trade record, so no no-trade fraction exists for it
 and it is not restricted: every aggregated window enters every restricted
@@ -107,8 +109,25 @@ ratio to the observed gap A. The range over the p grid is also taken from
 staleness_curves.csv, at the base cell and at N = 5,000, the length nearest
 the 4,000-hour window. If staleness.json is absent nothing is computed.
 
-Figure 1 of the paper (fig6_comparative.png). Every unrestricted window of the three groups, gaps
-filled, with group medians, drawn from asset_class_windows.
+Prices (Figure fig5_prices). Daily close of day D (UTC): the last cleaned
+trade price at or before the end of D for carbon tokens, the last priced
+hourly vendor bar at or before D 23:00 for BTC and ETH; both carried forward
+over days without an observation. Conventions:
+  base      close of 18 October 2021
+  peak      maximum daily close over November 2021
+  trough    minimum daily close over calendar 2022
+  end       last observed price strictly before SAMPLE_END
+  drawdown  1 - trough / peak, and 1 - trough / base
+  end value end / base - 1
+A series without an observation by the end of the base day (or in November
+2021) has no base (or peak) value; those tokens are listed, and their end
+relative to their own first daily close is given separately. The figure
+indexes series with a base to 100 at the base close and the others to 100 at
+their first daily close, drawn dashed and labelled as such.
+
+Figure fig6_comparative. Every unrestricted window of the three groups, gaps
+filled, one row per token, with token and group medians, drawn from
+asset_class_windows.
 
 Outputs (via klimafrac.results):
   data/results/asset_class_windows.csv    one row per window of every series
@@ -119,10 +138,11 @@ Outputs (via klimafrac.results):
                                           gaps and exact token-level tests
   data/results/asset_class_power.csv      size and power per contrast,
                                           restriction, variant and point
-  data/results/asset_class.json           cited numbers
-  figures/fig6_comparative.png
+  data/results/asset_class_prices.csv     price conventions per series
+  data/results/asset_class.json           every number the paper cites
+  figures/fig5_prices.png, figures/fig6_comparative.png
 --quick uses 999 permutation draws, 20 replications and a short ladder,
-suffixes every output _quick and writes no figure. The full run needs every
+suffixes every output _quick and writes no figures. The full run needs every
 swap file; it stops naming the missing ones otherwise.
 
 Usage:
@@ -143,7 +163,7 @@ import pandas as pd
 from klimafrac import stats, trades
 from klimafrac.mfdfa import positive_spectrum
 from klimafrac.paths import data, figure
-from klimafrac.plotstyle import INK, MUTED, SERIES, SURFACE, plt, save, style
+from klimafrac.plotstyle import INK, INK2, MUTED, SERIES, SURFACE, plt, save, style
 from klimafrac.results import RESULTS_DIR, numbers, read_numbers, table
 from klimafrac.synthetic import INTEGRAL_SCALE, mrw
 
@@ -173,6 +193,10 @@ GAP_LADDER = (0.05, 0.10, 0.15, 0.20, 0.25)
 CAL_LAMBDA2 = (0.0, 0.01, 0.02, 0.035, 0.05, 0.075, 0.10, 0.125, 0.15, 0.20, 0.25,
                0.30, 0.40, 0.50, 0.60)
 CAL_WINDOWS = 400
+
+BASE_DAY = pd.Timestamp("2021-10-18", tz="UTC")
+PEAK_MONTH = (pd.Timestamp("2021-11-01", tz="UTC"), pd.Timestamp("2021-12-01", tz="UTC"))
+TROUGH_YEAR = (pd.Timestamp("2022-01-01", tz="UTC"), pd.Timestamp("2023-01-01", tz="UTC"))
 EPS = 1e-12
 
 
@@ -201,12 +225,13 @@ def vendor_prices() -> pd.DataFrame:
     return v.reindex(grid)
 
 
-def reconstructed_series(token: str) -> pd.DataFrame:
-    """Hourly grid of the cleaned in-sample trades."""
-    grid = trades.calendar(trades.trades({**CARBON, **RECONSTRUCTED}[token]), freq="1h")
+def reconstructed_series(token: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Cleaned in-sample trades and their hourly grid."""
+    d = trades.trades({**CARBON, **RECONSTRUCTED}[token])
+    grid = trades.calendar(d, freq="1h")
     if grid.ret.isna().any():
         raise ValueError(f"{token}: hourly grid has undefined returns")
-    return grid
+    return d, grid
 
 
 def reconstructed_windows(token: str, grid: pd.DataFrame) -> tuple[pd.DataFrame, dict, dict]:
@@ -245,14 +270,15 @@ def _label(w: pd.DataFrame, token: str) -> pd.DataFrame:
     return w
 
 
-def load_all() -> tuple[pd.DataFrame, dict, dict]:
-    parts, patterns, info = [], {}, {}
+def load_all() -> tuple[pd.DataFrame, dict, dict, dict]:
+    parts, patterns, info, daily = [], {}, {}, {}
     for token in list(CARBON) + list(RECONSTRUCTED):
-        grid = reconstructed_series(token)
+        d, grid = reconstructed_series(token)
         w, pat, inf = reconstructed_windows(token, grid)
         parts.append(w)
         info[token] = inf
         patterns.update({f"{token}:{k}": v for k, v in pat.items()})
+        daily[token] = (d.set_index("timestamp").price, d.timestamp.iloc[0])
         print(f"  {token:7s} {inf['hours']:6,} hours from {inf['first_hour']:%Y-%m-%d %H:%M}  "
               f"{len(w)} windows  no-trade {100 * inf['no_trade_all_hours']:.1f}% of hours")
     vend = vendor_prices()
@@ -260,13 +286,15 @@ def load_all() -> tuple[pd.DataFrame, dict, dict]:
         w, inf = vendor_windows(symbol, vend[symbol])
         parts.append(w)
         info[symbol] = inf
+        priced = vend[symbol].dropna()
+        daily[symbol] = (priced, priced.index[0])
         print(f"  {symbol:7s} {inf['hours']:6,} hours from {inf['first_hour']:%Y-%m-%d %H:%M}  "
               f"{len(w)} windows  {inf['missing_bars']} missing bars, filled; "
               f"{int((w.missing_bars > 0).sum())} windows touch one")
     win = pd.concat(parts, ignore_index=True)
     for name, thr in RESTRICTIONS.items():
         win[f"in_{name}"] = True if thr is None else (win.no_trade.isna() | (win.no_trade <= thr))
-    return win, patterns, info
+    return win, patterns, info, daily
 
 
 # --- contrasts ------------------------------------------------------------
@@ -613,30 +641,127 @@ def staleness_bound(gap: float, out: dict) -> None:
         print(f"  {k.removeprefix(pre + '.')}: {out[k]:.2f}")
 
 
-# --- figure ---------------------------------------------------------------
+# --- prices ---------------------------------------------------------------
+
+def daily_close(prices: pd.Series) -> pd.Series:
+    close = prices.resample("1D").last().ffill()
+    return close[close.index < trades.SAMPLE_END]
+
+
+def prices_table(daily: dict, out: dict) -> tuple[pd.DataFrame, dict]:
+    rows, closes = [], {}
+    for token in list(CARBON) + list(AGGREGATED):
+        raw, first_obs = daily[token]
+        raw = raw[raw.index < trades.SAMPLE_END]
+        close = daily_close(raw)
+        closes[token] = close
+        has_base = first_obs < BASE_DAY + pd.Timedelta("1D")
+        base = close.get(BASE_DAY, np.nan) if has_base else np.nan
+        nov = close[(close.index >= PEAK_MONTH[0]) & (close.index < PEAK_MONTH[1])]
+        has_peak = first_obs < PEAK_MONTH[0]
+        y22 = close[(close.index >= TROUGH_YEAR[0]) & (close.index < TROUGH_YEAR[1])]
+        end_time, end = raw.index[-1], float(raw.iloc[-1])
+        first_close = float(close.iloc[0])
+        row = {"token": token, "source": "aggregated" if token in AGGREGATED else "reconstructed",
+               "first_observation": first_obs, "has_base": bool(has_base),
+               "base_close": base, "has_nov2021_peak": bool(has_peak),
+               "nov2021_max_close": nov.max() if has_peak else np.nan,
+               "nov2021_max_date": nov.idxmax() if has_peak else None,
+               "trough_2022_close": y22.min(), "trough_2022_date": y22.idxmin(),
+               "drawdown_from_nov2021_max_pct": 100 * (1 - y22.min() / nov.max()) if has_peak else np.nan,
+               "drawdown_from_base_pct": 100 * (1 - y22.min() / base) if has_base else np.nan,
+               "end_time": end_time, "end_price": end,
+               "end_vs_base_pct": 100 * (end / base - 1) if has_base else np.nan,
+               "first_close_date": close.index[0], "first_close": first_close,
+               "end_vs_first_close_pct": 100 * (end / first_close - 1)}
+        rows.append(row)
+        for k, v in row.items():
+            if k != "token":
+                out[f"asset_class.prices.{token}.{k}"] = v
+    df = pd.DataFrame(rows)
+    out["asset_class.prices.lacking_base"] = df.token[~df.has_base].tolist()
+    out["asset_class.prices.lacking_nov2021_peak"] = df.token[~df.has_nov2021_peak].tolist()
+    print(df[["token", "has_base", "drawdown_from_nov2021_max_pct", "drawdown_from_base_pct",
+              "trough_2022_date", "end_time", "end_vs_base_pct", "end_vs_first_close_pct"]]
+          .to_string(index=False, float_format=lambda v: f"{v:.1f}"))
+    return df, closes
+
+
+# --- figures --------------------------------------------------------------
+
+def _colour(token: str) -> str:
+    return {"BTC": INK, "ETH": MUTED}.get(token, SERIES.get(token, INK2))
+
+
+def plot_prices(df: pd.DataFrame, closes: dict, path: str) -> None:
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    ends = []
+    for _, r in df.iterrows():
+        c = closes[r.token]
+        if r.has_base:
+            idx, label, ls = 100 * c[c.index >= BASE_DAY] / r.base_close, r.token, "-"
+        else:
+            idx = 100 * c / r.first_close
+            label, ls = f"{r.token} (100 at {r.first_close_date:%d %b %Y})", "--"
+        conv = r.token in AGGREGATED
+        ax.plot(idx.index, idx.values, ls, lw=2.0 if conv else 1.4, color=_colour(r.token),
+                alpha=1.0 if conv else 0.85, zorder=3 if conv else 2)
+        ends.append((idx.index[-1], idx.values[-1], label, _colour(r.token)))
+    ax.set_yscale("log")
+    ax.axhline(100, color=MUTED, lw=1, ls=":")
+    style(ax, ylabel=f"daily close, 100 at {BASE_DAY:%d %b %Y} (log)")
+    lo = min(closes[t].index[0] for t in closes)
+    ax.set_xlim(max(lo, BASE_DAY - pd.Timedelta("10D")), trades.SAMPLE_END + pd.Timedelta("330D"))
+    fig.tight_layout()
+    ends.sort(key=lambda e: e[1])
+    lo_y, hi_y = (np.log10(v) for v in ax.get_ylim())
+    pos = [(np.log10(y) - lo_y) / (hi_y - lo_y) for _, y, _, _ in ends]
+    for i in range(1, len(pos)):
+        pos[i] = max(pos[i], pos[i - 1] + 0.055)
+    for (x, _, text, colour), p in zip(ends, pos):
+        ax.annotate(text, xy=(x, p), xycoords=("data", "axes fraction"), xytext=(6, 0),
+                    textcoords="offset points", color=colour, fontsize=8.5,
+                    fontweight="bold", va="center")
+    save(fig, path)
+
 
 def plot_comparative(win: pd.DataFrame, path: str) -> None:
     w = subset(win, "all", "gaps_filled")
-    groups = [("carbon", "carbon tokens\nown pools", SERIES["BCT"]),
-              ("reconstructed", "conventional\nown pools", SERIES["MCO2"]),
-              ("aggregated", "conventional\naggregated", MUTED)]
-    fig, ax = plt.subplots(figsize=(9, 3.8))
+    groups = [("carbon", "carbon tokens, own pools", SERIES["BCT"],
+               [("BCT", "BCT"), ("NCT", "NCT"), ("MCO2", "MCO2"), ("KLIMA", "KLIMA")]),
+              ("reconstructed", "conventional, own pools", SERIES["MCO2"],
+               [("WETH_S", "WETH (Sushiswap)"), ("WETH_Q", "WETH (Quickswap)"),
+                ("WBTC_Q", "WBTC (Quickswap)")]),
+              ("aggregated", "conventional, aggregated", MUTED,
+               [("BTC", "Bitcoin"), ("ETH", "Ether")])]
+    fig, ax = plt.subplots(figsize=(9, 5.2))
     rng = np.random.default_rng(SEED)
-    labels = []
-    for i, (group, label, colour) in enumerate(groups):
+    y, ticks, labels = 0.0, [], []
+    for group, title, colour, tokens in groups:
+        top = y
+        for token, name in tokens:
+            v = w[w.token == token].width_pos.to_numpy()
+            ax.scatter(v, y + rng.uniform(-0.13, 0.13, len(v)), s=36, color=colour, alpha=0.8,
+                       edgecolor=SURFACE, linewidth=1.0, zorder=3)
+            med = float(np.median(v))
+            ax.plot([med, med], [y - 0.30, y + 0.30], color=INK, lw=2.2, zorder=4)
+            ticks.append(y)
+            labels.append(f"{name}  $n={len(v)}$")
+            y += 1
         v = w[w.group == group].width_pos.to_numpy()
-        ax.scatter(v, i + rng.uniform(-0.16, 0.16, len(v)), s=42, color=colour, alpha=0.75,
-                   edgecolor=SURFACE, linewidth=1.0, zorder=3)
         med = float(np.median(v))
-        ax.plot([med, med], [i - 0.30, i + 0.30], color=INK, lw=2.4, zorder=4)
-        ax.text(med, i + 0.42, f"{med:.3f}", ha="center", fontsize=9, color=INK, fontweight="bold")
-        labels.append(f"{label}\n$n={len(v)}$")
-    ax.set_yticks(range(len(groups)))
+        ax.plot([med, med], [top - 0.45, y - 0.55], color=INK2, lw=1.0, ls=(0, (3, 2)), zorder=2)
+        ax.text(0.995, top - 0.52, f"{title}: group median {med:.3f}, $n={len(v)}$",
+                transform=ax.get_yaxis_transform(), ha="right", va="bottom", fontsize=9,
+                color=INK2)
+        y += 0.9
+    ax.set_yticks(ticks)
     ax.set_yticklabels(labels, fontsize=9)
-    ax.set_ylim(-0.6, len(groups) - 0.2)
+    ax.set_ylim(-1.0, y - 1.3)
     ax.invert_yaxis()
     ax.set_xlabel(r"$\Delta\alpha^{+}$ per non-overlapping window of 4,000 hourly returns")
     style(ax)
+    ax.grid(axis="y", visible=False)
     fig.tight_layout()
     save(fig, path)
 
@@ -673,7 +798,7 @@ def main():
            "asset_class.design.seed": SEED}
 
     print("Hourly series")
-    win, patterns, info = load_all()
+    win, patterns, info, daily = load_all()
     print("\nContrasts (window-level permutation, windows treated as exchangeable)")
     con = contrasts(win, draws, out)
     print("\nTokens")
@@ -684,6 +809,8 @@ def main():
           .round(3).to_string(index=False))
     print("\nStaleness bound (ratio to the observed gap A, all windows)")
     staleness_bound(out["asset_class.contrast.A.all.gaps_filled.gap"], out)
+    print("\nPrices")
+    prices, closes = prices_table(daily, out)
     print(f"\nSize and power ({reps} replications, {power_draws} permutation draws, "
           f"{args.jobs} workers)")
     pw = power(win, patterns, reps, power_draws, ladder, cal_windows, args.jobs, out)
@@ -693,10 +820,12 @@ def main():
     table("asset_class_contrasts" + suffix, con)
     table("asset_class_tokens" + suffix, tok)
     table("asset_class_power" + suffix, pw)
+    table("asset_class_prices" + suffix, prices)
     print("\nwrote", numbers("asset_class" + suffix, out))
     if not args.quick:
+        plot_prices(prices, closes, figure("fig5_prices.png"))
         plot_comparative(win, figure("fig6_comparative.png"))
-        print("wrote", figure("fig6_comparative.png"))
+        print("wrote", figure("fig5_prices.png"), "and", figure("fig6_comparative.png"))
     print(f"runtime {out['asset_class.runtime_seconds']:.0f} s")
 
 

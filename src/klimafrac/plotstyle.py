@@ -1,4 +1,4 @@
-"""One palette and one axis treatment for every figure."""
+"""One palette and one axis treatment for every figure in the paper."""
 
 import matplotlib
 

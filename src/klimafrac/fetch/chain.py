@@ -3,22 +3,34 @@ Shared on-chain helpers for the non-swap fetchers.
 
   metered(chain)           a JSON-RPC client that counts every call it makes,
                            so each module can report what its run cost
-  Blocks.timestamps(bs)    the timestamps of blocks, read with batched
-                           eth_getBlockByNumber.
+  Blocks.block_before(ts)  the last block whose timestamp is strictly earlier
+                           than ts. A state "at 2025-10-01" is the state after
+                           that block: immediately before 00:00 UTC that day.
+                           Found by bracketed interpolation search on
+                           eth_getBlockByNumber, exact to the block.
   Blocks.deployment(addr)  the first block at which addr has code.
   logs_in_range(...)       eth_getLogs over an arbitrary span, split into
                            sub-ranges that follow the node's own hint when a
                            response would exceed its 10,000-log limit.
 
-Blocks are cached in data/raw/blocks/<chain>.json, so each is read once and
-every fetcher sees the same answer. The cache keeps each block's hash next to
-its timestamp -- the hash is in the same response and costs nothing extra --
-and records the chain id, the endpoint and when it was read, so a cache can
-never be silently attributed to the wrong chain.
+Blocks are cached in data/raw/blocks/<chain>.json, so each is computed once
+and every fetcher reads the same block for the same instant. The cache keeps
+each block's hash next to its timestamp -- the hash is in the same response
+and costs nothing extra -- and records the chain id, the endpoint and when it
+was read, so a cache can never be silently attributed to the wrong chain.
 
-Every helper raises on failure.
+Every helper raises on failure. Two outcomes are treated as answers rather
+than errors, and both mean the node ran the call and no value came back. One
+is an explicit revert, JSON-RPC code 3, which `call_or_revert` returns as
+None: that is how a contract says an index is out of range or a function does
+not exist. The other is a call the EVM could not finish -- it exhausts the
+gas cap, or trips an invalid opcode -- which arrives under -32000, the code
+the node also uses when it is merely unwell, so those are told apart by
+message against the closed list in EVM_FAILURES and recorded in UNANSWERED.
+Anything else under -32000 stays a fault and is retried.
 """
 
+import bisect
 import datetime as dt
 import gzip
 import hashlib
@@ -36,11 +48,15 @@ from klimafrac.paths import RAW_DIR, raw
 
 WINDOW_END = pd.Timestamp("2026-07-26", tz="UTC")     # exclusive
 ZERO = "0x" + "0" * 40
+ZERO_TOPIC = "0x" + "0" * 64
 TRANSFER_TOPIC = keccak_hex("Transfer(address,address,uint256)")
 BATCH = 20
 LOG_LIMIT = 10_000                 # the node's cap on logs in one response
 SAVE_EVERY = 50                    # block batches between cache writes
+SEARCH_GROUP = 8                   # instants searched for at a time
 CHAIN_ID = {"polygon": 137, "base": 8453}
+TRANSFER_COLUMNS = ["block", "log_index", "tx_hash", "timestamp", "raw_value",
+                    "from", "to"]
 LOG_COLUMNS = ["block", "log_index", "tx_hash", "from", "to", "raw_value"]
 
 # Alchemy compute units per method, pay-as-you-go price per unit.
@@ -51,9 +67,12 @@ CU = {"eth_getLogs": 60, "alchemy_getAssetTransfers": 120, "eth_call": 26,
 CU_PRICE = 0.525 / 1e6
 
 __all__ = ["BATCH", "CU", "CU_PRICE", "LOG_COLUMNS", "LOG_LIMIT",
-           "TRANSFER_TOPIC", "WINDOW_END", "ZERO", "Blocks", "Meter",
-           "MeteredClient", "as_address", "as_string", "as_uint", "calldata",
-           "chunks", "decode_transfer_logs", "eth_calls", "file_record",
+           "TRANSFER_COLUMNS", "TRANSFER_TOPIC", "WINDOW_END", "ZERO",
+           "ZERO_TOPIC", "Blocks", "Meter", "MeteredClient", "as_address",
+           "as_string", "as_uint", "as_uints", "asset_transfers",
+           "call_or_revert", "calldata", "calls_allowing_reverts", "chunks",
+           "decode_transfer_logs", "eth_calls", "event_topic", "file_record",
+           "EVM_FAILURES", "UNANSWERED", "is_execution_failure", "is_revert",
            "iso", "logs_in_range", "metered", "now", "range_hint",
            "raw_manifest", "record_spend", "say", "selector", "sha256_of",
            "topic_address", "utc_ts", "write_csv", "write_json"]
@@ -223,6 +242,10 @@ def selector(signature: str) -> str:
     return keccak_hex(signature)[:10]
 
 
+def event_topic(signature: str) -> str:
+    return keccak_hex(signature)
+
+
 def calldata(signature: str, *args) -> str:
     out = selector(signature)
     for a in args:
@@ -243,6 +266,12 @@ def as_uint(result: str) -> int:
     if not isinstance(result, str) or len(result) < 66:
         raise ValueError(f"not a uint256 return value: {result!r}")
     return int(result[2:66], 16)
+
+
+def as_uints(result: str, n: int) -> list[int]:
+    if not isinstance(result, str) or len(result) < 2 + 64 * n:
+        raise ValueError(f"not {n} uint256 return values: {result!r}")
+    return [int(result[2 + 64 * i:66 + 64 * i], 16) for i in range(n)]
 
 
 def as_address(result: str) -> str:
@@ -269,6 +298,87 @@ def topic_address(topic: str) -> str:
 
 
 # --- calls -----------------------------------------------------------------
+
+UNANSWERED: set[str] = set()       # contracts whose getters exhausted the gas cap
+
+
+def is_revert(error) -> bool:
+    """The node executed the call and the contract refused it.
+
+    JSON-RPC code 3 is the execution-reverted code. Nothing else counts: a
+    node fault carrying the words "execution reverted" in some wrapper text
+    must reach the caller as an error, never as a contract's answer.
+    """
+    return isinstance(error, dict) and error.get("code") == 3
+
+
+# Ways the EVM itself can run and produce no value. Every one of them is
+# decided by the contract's code and the state at the block asked about, so it
+# is reproducible: asking again gets the same answer. They are listed rather
+# than matched loosely because -32000 is also the code the node uses when it
+# is merely unwell -- "header not found", "missing trie node", a rate limit --
+# and those must stay retryable.
+EVM_FAILURES = ("out of gas", "gas uint64 overflow", "invalid opcode",
+                "invalid jump destination", "stack limit reached",
+                "stack underflow", "write protection", "max code size exceeded",
+                "contract creation code storage out of gas")
+
+
+def is_execution_failure(error) -> bool:
+    """The node ran the call and no value came back.
+
+    A getter that cannot be evaluated -- it exhausts the gas cap, or trips an
+    invalid opcode -- returns nothing however often it is asked, because the
+    cap, the code and the state are all fixed by the block. So this is the
+    call's outcome rather than a fault to retry, even though it arrives under
+    -32000, the code that otherwise carries genuinely transient node trouble.
+    The addresses it happens to are recorded in UNANSWERED, so a census can
+    report how many of its probes went unanswered instead of silently counting
+    them as contracts that answered nothing.
+    """
+    if not isinstance(error, dict) or error.get("code") != -32000:
+        return False
+    message = str(error.get("message", "")).lower()
+    return any(failure in message for failure in EVM_FAILURES)
+
+
+def _eth_call(to: str, data: str, block: int) -> tuple[str, list]:
+    return ("eth_call", [{"to": to, "data": data}, hex(block)])
+
+
+def calls_allowing_reverts(client, calls: list[tuple[str, str, int]]) -> list[str | None]:
+    """Batched eth_call where a call that produced no answer is None.
+
+    A request carrying `allow_errors` is answered once, without the retries a
+    plain batch makes, so a call that came back with anything other than a
+    revert or an exhausted gas cap is asked again through the retrying path: a
+    transient fault is then retried there, and a permanent one raises.
+    """
+    out: list[str | None] = []
+    for i in range(0, len(calls), BATCH):
+        part = calls[i:i + BATCH]
+        got = client.batch([_eth_call(*c) for c in part], allow_errors=True)
+        answers: list[str | None] = []
+        again = []
+        for k, (result, error) in enumerate(got):
+            if error is not None and not is_revert(error):
+                if is_execution_failure(error):
+                    UNANSWERED.add(part[k][0])
+                else:
+                    again.append(k)
+            answers.append(None if error is not None else result)
+        if again:
+            for k, value in zip(again, client.batch([_eth_call(*part[k])
+                                                     for k in again])):
+                answers[k] = value
+        out.extend(answers)
+    return out
+
+
+def call_or_revert(client, to: str, data: str, block: int) -> str | None:
+    """eth_call that returns None on an explicit revert and raises otherwise."""
+    return calls_allowing_reverts(client, [(to, data, block)])[0]
+
 
 def eth_calls(client, calls: list[tuple[str, str, int]]) -> list[str]:
     """Batched eth_call; (to, data, block) in, results in order. Any error raises."""
@@ -363,10 +473,45 @@ def decode_transfer_logs(logs: list[dict], token: str) -> list[tuple]:
     return rows
 
 
+# --- transfers -------------------------------------------------------------
+
+def asset_transfers(client, token: str, a: int, b: int,
+                    exclude_zero: bool = False, **side) -> list[tuple]:
+    """Every ERC-20 transfer of `token` in blocks [a, b], all pages.
+
+    `side` is fromAddress=... and/or toAddress=... Rows follow
+    TRANSFER_COLUMNS, raw_value an exact integer as a string.
+    """
+    params = {"fromBlock": hex(a), "toBlock": hex(b), "contractAddresses": [token],
+              "category": ["erc20"], "withMetadata": True,
+              "excludeZeroValue": exclude_zero, "maxCount": hex(1000),
+              "order": "asc", **side}
+    rows, page_key = [], None
+    while True:
+        query = dict(params, pageKey=page_key) if page_key else params
+        res = client.call("alchemy_getAssetTransfers", [query])
+        for t in res["transfers"]:
+            contract = t["rawContract"]
+            if (contract["address"] or "").lower() != token.lower():
+                raise ValueError(f"unexpected contract {contract['address']}")
+            if contract["value"] is None:
+                raise ValueError(f"transfer without a raw value: {t['uniqueId']}")
+            tx, kind, index = t["uniqueId"].split(":")
+            if kind != "log" or tx.lower() != t["hash"].lower():
+                raise ValueError(f"unexpected uniqueId {t['uniqueId']}")
+            rows.append((int(t["blockNum"], 16), int(index), tx.lower(),
+                         utc_ts(t["metadata"]["blockTimestamp"]),
+                         str(int(contract["value"], 16)),
+                         (t["from"] or "").lower(), (t["to"] or "").lower()))
+        page_key = res.get("pageKey")
+        if not page_key:
+            return rows
+
+
 # --- blocks ----------------------------------------------------------------
 
 class Blocks:
-    """Block timestamps and deployment blocks, cached on disk."""
+    """Exact timestamp -> block lookups and deployment blocks, cached on disk."""
 
     def __init__(self, client, chain: str = "polygon"):
         self.client, self.chain = client, chain
@@ -374,6 +519,7 @@ class Blocks:
         self.path = raw("blocks", f"{chain}.json")
         self._ts: dict[int, int] = {}
         self._hash: dict[int, str] = {}
+        self._before: dict[int, int] = {}
         self._deploy: dict[str, int] = {}
         self._load()
         self.chain_id = self._check_chain_id()
@@ -393,20 +539,25 @@ class Blocks:
             self._ts[int(k)] = int(v["timestamp"])
             if v.get("hash"):
                 self._hash[int(k)] = v["hash"]
+        for k, v in d.get("timestamp", {}).items():      # cache written before hashes
+            self._ts.setdefault(int(k), int(v))
+        self._before.update({int(k): int(v) for k, v in d["block_before"].items()})
         self._deploy.update(d["deployment"])
 
     def save(self) -> None:
-        mine = (dict(self._ts), dict(self._hash), dict(self._deploy))
+        mine = (dict(self._ts), dict(self._hash), dict(self._before), dict(self._deploy))
         self._load()                         # merge anything another run added
         self._ts.update(mine[0])
         self._hash.update(mine[1])
-        self._deploy.update(mine[2])
+        self._before.update(mine[2])
+        self._deploy.update(mine[3])
         write_json({"chain": self.chain, "chain_id": CHAIN_ID[self.chain],
                     "endpoint": self.client.name, "end_block": self.end,
                     "retrieved_at": now(),
                     "blocks": {str(k): {"timestamp": self._ts[k],
                                         "hash": self._hash.get(k)}
                                for k in sorted(self._ts)},
+                    "block_before": {str(k): self._before[k] for k in sorted(self._before)},
                     "deployment": dict(sorted(self._deploy.items()))}, self.path)
 
     def timestamps(self, blocks) -> dict[int, int]:
@@ -428,6 +579,75 @@ class Blocks:
 
     def timestamp(self, block: int) -> int:
         return self.timestamps([block])[block]
+
+    def hash(self, block: int) -> str:
+        """The block's hash. Read again if the cache predates hashes being kept."""
+        block = int(block)
+        if block not in self._hash:
+            blk = self.client.call("eth_getBlockByNumber", [hex(block), False])
+            if blk is None or int(blk["number"], 16) != block:
+                raise RpcError(f"{self.chain}: block {block} not returned")
+            self._ts[block] = int(blk["timestamp"], 16)
+            self._hash[block] = blk["hash"]
+            self.save()
+        return self._hash[block]
+
+    def block_before(self, targets) -> dict[int, int]:
+        """For each unix time t: the last block with timestamp < t.
+
+        Targets must fall after genesis and no later than the timestamp of
+        END_BLOCK + 1, so the answer never lies beyond the pinned range.
+
+        Unresolved instants are searched for in ascending groups rather than
+        all at once: each group's answers tighten the bracket the next group
+        starts from, which costs about a third fewer block reads.
+        """
+        targets = sorted({int(t) for t in targets})
+        todo = [t for t in targets if t not in self._before]
+        if todo:
+            hi0 = self.end + 1
+            ts = self.timestamps([0, hi0])
+            outside = [t for t in todo if not ts[0] < t <= ts[hi0]]
+            if outside:
+                raise ValueError(f"{self.chain}: instants outside the pinned range: "
+                                 f"{[iso(t) for t in outside[:3]]}")
+        for i in range(0, len(todo), SEARCH_GROUP):
+            self._resolve(todo[i:i + SEARCH_GROUP])
+        return {t: self._before[t] for t in targets}
+
+    def _resolve(self, todo: list[int]) -> None:
+        if todo:
+            state = {t: self._seed(t) for t in todo}
+            while True:
+                probes = {}
+                for t, (lo, lts, hi, hts) in state.items():
+                    if hi - lo <= 1:
+                        continue
+                    g = lo + int((t - lts) * (hi - lo) / max(hts - lts, 1))
+                    g = min(max(g, lo + 1), hi - 1)
+                    probes[t] = {g, min(g + 1, hi - 1), max(g - 1, lo + 1),
+                                 (lo + hi) // 2}
+                if not probes:
+                    break
+                known = self.timestamps(set().union(*probes.values()))
+                for t, cand in probes.items():
+                    s = state[t]
+                    for b in cand:
+                        if known[b] < t and b > s[0]:
+                            s[0], s[1] = b, known[b]
+                        elif known[b] >= t and b < s[2]:
+                            s[2], s[3] = b, known[b]
+            for t, s in state.items():
+                self._before[t] = s[0]
+            self.save()
+
+    def _seed(self, t: int) -> list[int]:
+        """Tightest bracket [lo, hi] from timestamps already known."""
+        blocks = sorted(b for b in self._ts if b <= self.end + 1)
+        times = [self._ts[b] for b in blocks]
+        i = bisect.bisect_left(times, t)          # first known block with ts >= t
+        lo, hi = blocks[i - 1], blocks[i]
+        return [lo, self._ts[lo], hi, self._ts[hi]]
 
     def deployment(self, address: str) -> int:
         address = address.lower()

@@ -1,8 +1,10 @@
 """
 Where analyses put what they produce.
 
-Tables go to data/results/<name>.csv. The numbers the paper cites go to
-data/results/<module>.json under stable keys.
+Tables go to data/results/<name>.csv. Every number the paper cites goes to
+data/results/<module>.json under a stable key (data/results_pool under
+KLIMAFRAC_PRICE=pool, see paths.py), so verify_paper.py can compare
+the manuscript with the pipeline's output rather than with hand-copied values.
 """
 
 import json
@@ -10,9 +12,7 @@ import math
 
 import pandas as pd
 
-from klimafrac.paths import DATA_DIR
-
-RESULTS_DIR = DATA_DIR / "results"
+from klimafrac.paths import RESULTS_DIR  # noqa: F401  (re-exported)
 
 
 def _clean(value):
@@ -34,6 +34,10 @@ def table(name: str, df: pd.DataFrame) -> str:
     path = RESULTS_DIR / f"{name}.csv"
     df.to_csv(path, index=False)
     return str(path)
+
+
+def read_table(name: str, **kwargs) -> pd.DataFrame:
+    return pd.read_csv(RESULTS_DIR / f"{name}.csv", **kwargs)
 
 
 def numbers(module: str, values: dict) -> str:

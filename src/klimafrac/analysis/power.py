@@ -1,58 +1,74 @@
 """
-Size of the overlapping-window inference and power of the non-overlapping
-design, both simulated on multifractal random walks (paper Section 3.4 for
-the size of the overlapping-window procedure, the Power paragraph of
-Section 4.2 for the power of the design used).
+Size of the customary rolling-window inference and power of the design the
+paper uses, both simulated on multifractal random walks (paper Section 4.1.3
+"Size of the customary inference", the Power paragraph of Section 4.2.1, and
+the 40% figure repeated in Sections 3.3 and 5.2).
 
-Both simulations reproduce the empirical comparisons NCT vs BCT and MCO2 vs
-BCT, one design at a time. Each simulated group is one MRW series
-(synthetic.mrw, integral scale synthetic.INTEGRAL_SCALE) whose length equals
-that token's number of trade-to-trade returns in the estimation sample, so
-the simulated designs have the empirical window counts. The counts are read
-from the swap files, or given with --n-bct/--n-nct/--n-mco2.
+Both simulations reproduce the empirical comparison NCT vs BCT and MCO2 vs
+BCT, one design at a time and never pooled. Each simulated group is one MRW
+series (synthetic.mrw, integral scale synthetic.INTEGRAL_SCALE for both
+groups) whose length equals that token's number of trade-to-trade returns in
+the estimation sample, i.e. its cleaned trade count minus one, so the
+simulated designs have exactly the empirical window counts. The counts are
+read from the swap files, or given with --n-bct/--n-nct/--n-mco2.
 
-Calibration. The base lambda2 is set so that the simulated median window
-width matches BCT's empirical median width (4,000-return non-overlapping
-windows). For each lambda2 on LAMBDA2_GRID, CAL_WINDOWS windows give a median
-width; the medians are made monotone with a running maximum and inverted by
-linear interpolation. The alternative for nominal gap g is the lambda2 whose
-median width is the base median plus g. The nominal gap only positions the
-ladder; results are reported against the true gap.
+Calibration. The base intermittency lambda2 is set so that the simulated
+median window width matches BCT's empirical median window width
+(4,000-return non-overlapping windows, estimation sample). For each lambda2
+on LAMBDA2_GRID we simulate CAL_WINDOWS windows and take the median width;
+the medians are made monotone with a running maximum and the target is
+inverted by linear interpolation. The same curve places the alternatives:
+the alternative for nominal gap g is the lambda2 whose median width is the
+base median plus g (ladder direction "up") or minus g ("down"). The default,
+"auto", goes up when every target is reachable that way and down otherwise:
+the width the family yields flattens out above lambda2 of about 0.5, so a
+base width near that ceiling, as BCT's is on the pool price, leaves no room
+above it. The direction is recorded. The nominal gap only positions the
+ladder; every result is reported against the true gap below, and power
+levels are read against its absolute value.
 
-True gap. For the base and every alternative lambda2, POP_WINDOWS windows
-from a seed stream no test replication uses give the population median
-width. The true gap at a step is the alternative's population median minus
-the base's (zero at step 0). Its standard error is a bootstrap over the
-independent series the populations are built from.
+True gap. For the base and every alternative lambda2 a separate population
+of POP_WINDOWS windows, drawn from a seed stream no test replication uses,
+gives the population median window width. The true gap at a step is the
+alternative's population median minus the base's; at step 0 the two
+processes are identical and the gap is zero by construction. Its standard
+error is a bootstrap over the independent series the populations are built
+from.
 
-(i) Size, per design. Both groups share the base lambda2. Windows of 4,000
-advance by STEP = 250; widths of the two groups are regressed on a constant
-and a group dummy by OLS with Newey-West (Bartlett) standard errors, and
-equality is rejected when the dummy's p < 0.05. maxlags = WINDOW / STEP = 16,
-the lag at which two windows stop sharing observations. The Newey-West
-(1994) rule of thumb floor(4 (T/100)^(2/9)) is recorded alongside. The same
-series are then cut into non-overlapping windows (the overlapping windows
-starting at multiples of 4,000, as in trades.windows) and tested with
-stats.permutation_test. Rejection rates carry binomial standard errors
-sqrt(r (1 - r) / reps).
+(i) Size of the customary procedure, per design. Both groups share the base
+lambda2, so equality holds. Windows of 4,000 advance by 250; window widths
+of the two groups are stacked and regressed on a constant and a group dummy
+by OLS, with Newey-West (Bartlett) standard errors; equality is rejected when
+the dummy's p < 0.05. maxlags = WINDOW / STEP = 16, the lag at which two
+windows stop sharing observations, so the correction spans all of the
+dependence the overlap creates by construction. The Newey-West (1994) rule
+of thumb floor(4 (T/100)^(2/9)), shorter here, is recorded alongside. The
+same series are then cut into non-overlapping windows (the overlapping
+windows starting at multiples of 4,000, which are exactly trades.windows)
+and tested with stats.permutation_test. Rejection rates carry binomial
+standard errors sqrt(r (1 - r) / reps).
 
-(ii) Power, per design. The BCT-sized group has the base lambda2 and the
-other group the alternative; non-overlapping windows (trades.windows) and
-stats.permutation_test at 5%, as in analysis/tiers.py. Reported: power at
-every step and the true gap at which power first exceeds 1/3, 1/2 and 0.8,
-interpolated linearly between the bracketing steps.
+(ii) Power of the actual design, per design. The BCT-sized group has the
+base lambda2 and the other group the alternative; non-overlapping windows
+(trades.windows) and stats.permutation_test at 5%, as in analysis/tiers.py.
+The table reports power at every step and the true gap at which power
+first exceeds 1/3, 1/2 and 0.8, interpolated linearly in the true gap
+between the bracketing steps.
 
-Permutation draws default to stats.DRAWS. The p-value is only compared with
-0.05, so --draws 2000 (Monte Carlo standard error about 0.005 near 0.05) is
-an acceptable way to shorten a run.
+Permutation draws. Default 20,000, as in the empirical tests. The p-value
+of a replication is only compared with 0.05; with D draws its Monte Carlo
+standard error near 0.05 is sqrt(0.05 * 0.95 / D), 0.0015 at 20,000 and
+0.005 at 2,000, so --draws 2000 changes a rejection rate by far less than
+its binomial standard error at 500 replications (0.022 at 50%) and is an
+acceptable way to shorten a run.
 
 Seeds. A replication is identified by
     rep_id = design_code * 10**8 + step * 10**5 + rep
-(step < 1,000, rep < 100,000). Its series come from
-np.random.default_rng([1, rep_id]) and its permutation labels from
-stats.permutation_test(seed=rep_id). Calibration and population series use
-design codes 1 and 2 with the grid or ladder index as step and the series
-index as rep.
+(step < 1,000, rep < 100,000), distinct for every (design, step, rep) by
+construction. Its series come from np.random.default_rng([1, rep_id]) and
+its permutation labels from stats.permutation_test(seed=rep_id), which are
+different streams. Calibration and population series use design codes 1
+and 2 with the grid or ladder index as step and the series index as rep.
 
 Outputs:
   data/results/power_calibration.csv   median window width per lambda2
@@ -63,8 +79,10 @@ Outputs:
 --quick shrinks every count not given explicitly and suffixes the outputs
 with _quick.
 
-Runtime with the defaults is several core-hours (size about 7, power about
-5); set --jobs to use more cores.
+Runtime with paper defaults, measured single-core per task: a size
+replication about 12 s (1,700 overlapping windows), a power replication
+about 1.6 s, so size about 7 core-hours, power about 5, calibration and
+populations about 15 core-minutes; on 16 idle cores roughly one hour.
 
 Usage:
     uv run python -m klimafrac.analysis.power
@@ -105,7 +123,11 @@ SIZE_REPS = 1000
 POWER_REPS = 500
 DRAWS = stats.DRAWS
 
-LAMBDA2_GRID = tuple(np.round(np.arange(0.0, 0.5001, 0.02), 3))
+# Up to 0.5 in steps of 0.02, then on to 1.0 in steps of 0.05. The width a
+# multifractal random walk yields flattens out above 0.5, so the upper part
+# only serves a base width that sits close to that ceiling.
+LAMBDA2_GRID = (*np.round(np.arange(0.0, 0.5001, 0.02), 3),
+                *np.round(np.arange(0.55, 1.0001, 0.05), 3))
 CAL_WINDOWS = 1000
 POP_WINDOWS = 10_000
 SERIES_WINDOWS = 50            # windows per simulated series in calibration and populations
@@ -256,6 +278,8 @@ def main():
     ap.add_argument("--n-mco2", type=int, help="MCO2 return count (default: from data)")
     ap.add_argument("--target-width", type=float, help="BCT median window width (default: from data)")
     ap.add_argument("--lambda2", type=float, help="base lambda2, bypassing the width target")
+    ap.add_argument("--direction", default="auto", choices=("auto", "up", "down"),
+                    help="alternatives wider than the base (up) or narrower (down)")
     ap.add_argument("--skip-size", action="store_true")
     ap.add_argument("--skip-power", action="store_true")
     ap.add_argument("--jobs", type=int, default=os.cpu_count())
@@ -288,11 +312,30 @@ def main():
                             "windows": [sum(map(len, g)) for g in cal]}))
         lam_base = args.lambda2 if args.lambda2 is not None else invert(grid, monotone, target)
         base_width = float(np.interp(lam_base, grid, monotone))
-        ladder_lambdas = [lam_base if g == 0 else invert(grid, monotone, base_width + g)
+        # A gap is simulated only if the family can produce a width that far
+        # from the base in the ladder's direction; the rest are counted and
+        # left out.
+        def within(w: float) -> bool:
+            return monotone[0] - 1e-12 <= w <= monotone[-1] + 1e-12
+
+        direction = args.direction
+        if direction == "auto":
+            direction = "up" if all(within(base_width + g) for g in targets) else "down"
+        sign = 1.0 if direction == "up" else -1.0
+        reachable = [g for g in targets if within(base_width + sign * g)]
+        out["power.ladder.direction"] = direction
+        out["power.ladder.gaps_out_of_reach"] = [g for g in targets if g not in reachable]
+        out["power.calibration.widest_simulated"] = float(monotone[-1])
+        out["power.calibration.narrowest_simulated"] = float(monotone[0])
+        if len(reachable) < len(targets):
+            print(f"gaps above {reachable[-1]:g} cannot be simulated {direction}wards: base "
+                  f"width {base_width:.3f}, family yields {monotone[0]:.3f} to {monotone[-1]:.3f}")
+        targets = tuple(reachable)
+        ladder_lambdas = [lam_base if g == 0 else invert(grid, monotone, base_width + sign * g)
                           for g in targets]
         out.update({"power.calibration.lambda2_base": lam_base,
                     "power.calibration.windows_per_lambda2": args.cal_windows})
-        print(f"lambda2 base {lam_base:.4f}  ({time.time() - t0:.0f}s)")
+        print(f"lambda2 base {lam_base:.4f}, ladder {direction}  ({time.time() - t0:.0f}s)")
 
         pop = simulate_widths(pool, "population", ladder_lambdas, args.pop_windows)
         base_pop = np.median(np.concatenate(pop[0]))
@@ -301,7 +344,7 @@ def main():
         for k, (g, lam) in enumerate(zip(targets, ladder_lambdas)):
             med = np.median(np.concatenate(pop[k]))
             se = 0.0 if k == 0 else float(np.hypot(base_se, bootstrap_median_se(pop[k], seed=k)))
-            ladder.append({"step": k, "nominal_gap": g, "lambda2_base": lam_base,
+            ladder.append({"step": k, "nominal_gap": sign * g, "lambda2_base": lam_base,
                            "lambda2_alt": lam, "population_median": med,
                            "true_gap": 0.0 if k == 0 else med - base_pop, "true_gap_se": se})
         ladder = pd.DataFrame(ladder)
@@ -367,7 +410,7 @@ def main():
                     out[pre + f"step{row.step}.power_se"] = row.power_se
                 for level, name in zip(POWER_LEVELS, ("one_third", "half", "0.8")):
                     out[pre + f"gap_at_power_{name}"] = crossing(
-                        c.true_gap.to_numpy(), c.power.to_numpy(), level)
+                        np.abs(c.true_gap.to_numpy()), c.power.to_numpy(), level)
                 print(c[["step", "true_gap", "power", "power_se", "windows_base",
                          "windows_other"]].round(4).to_string(index=False),
                       f"({time.time() - t0:.0f}s)")

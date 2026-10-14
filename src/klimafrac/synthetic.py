@@ -19,7 +19,8 @@ tied to the series length, so that series of different lengths are draws from
 the same process.
 
 Both Gaussian processes are generated exactly by circulant embedding
-(Davies and Harte 1987).
+(Davies and Harte 1987). `check_embedding` verifies the variance and
+covariance of the generated omega against the target.
 """
 
 import numpy as np
@@ -69,3 +70,14 @@ def mrw(n: int, lambda2: float, rng: np.random.Generator,
     omega = _circulant_gaussian(cov, rng) - cov[0] / 2.0
     return eps * np.exp(omega)
 
+
+def check_embedding(n: int = 20_000, lambda2: float = 0.10, reps: int = 200,
+                    lags=(0, 10, 100, 1000), seed: int = 0) -> dict:
+    """Empirical / target autocovariance of omega at a few lags; all near 1."""
+    cov = omega_covariance(n, lambda2)
+    rng = np.random.default_rng(seed)
+    acc = np.zeros(len(lags))
+    for _ in range(reps):
+        w = _circulant_gaussian(cov, rng)
+        acc += [np.mean(w[: n - k] * w[k:]) for k in lags]
+    return {k: float(v / reps / cov[k]) for k, v in zip(lags, acc)}

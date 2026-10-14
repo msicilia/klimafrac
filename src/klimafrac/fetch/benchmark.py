@@ -2,9 +2,8 @@
 Conventional crypto benchmark: BTC and ETH prices from DefiLlama.
 
 A globally traded asset has no single pool to reconstruct, so the vendor's
-blended price is the instrument here. The hourly series are the aggregated
-side of the asset-class comparison (Section 4.3, Table 4 and Figure 1); the
-daily series is used only for the hourly-against-daily check.
+blended price is the instrument here. The series are the benchmark side of
+the asset-class comparison and of Figure 5.
 
 Source: https://coins.llama.fi/chart/coingecko:{bitcoin,ethereum}, stored
 verbatim by fetch/defillama.py, which documents the bar convention.

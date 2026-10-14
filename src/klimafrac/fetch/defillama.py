@@ -324,9 +324,12 @@ def hourly_daily_check(daily_output: str, hourly_output: str) -> dict | None:
     """Compare the two snapshots at the instants they share.
 
     Both series report the vendor's answer for 00:00 UTC, one asked with a 6h
-    search width and one with 30m, so they need not agree to the cent. The
-    check records bars priced in one and missing in the other, and relative
-    differences, in data/vendor_manifest.json. No network access.
+    search width and one with 30m, so they need not agree to the cent. What
+    the check establishes is that they describe the same asset over the same
+    grid: a bar priced in one and missing in the other, or a large relative
+    difference, is a property of the vendor worth recording rather than
+    discovering later as a discrepancy between two tables. Free: both
+    snapshots are already on disk.
     """
     day, hour = Path(data(daily_output)), Path(data(hourly_output))
     if not (day.exists() and hour.exists()):

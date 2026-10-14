@@ -1,7 +1,7 @@
 """
 Transaction-time comparison of the carbon pool tiers: NCT against BCT and
-MCO2 against BCT (paper Section 4.2, "Within the quality ladder", and
-Appendix B, Table A2).
+MCO2 against BCT (paper Section 4.2.1, "Within the quality ladder", with its
+Robustness paragraph and Table tab:robust).
 
 Main comparison. Each token's cleaned trades in the estimation sample
 (trades.trades) give trade-to-trade log returns (trades.returns, first trade
@@ -35,7 +35,7 @@ log median trade size (natural log of dollars), windows of the three tokens
 pooled, with HC3 standard errors. Non-overlapping windows need no
 autocorrelation correction; HC3 guards against the unequal group sizes.
 
-Robustness (Table A2). Each specification reruns both comparisons:
+Robustness (Table tab:robust). Each specification reruns both comparisons:
   estimation sample   the specification above
   full data window    cleaned trades without the SAMPLE_END restriction
   isolated trades     only swaps that are alone in their block, with returns
@@ -50,8 +50,8 @@ Robustness (Table A2). Each specification reruns both comparisons:
                       MAX_DEVIATION in {2, 3, 5, off}; 32 combinations, each
                       applied to the full data window before the estimation
                       sample is taken, exactly as trades.clean is. The range
-                      of BCT's median window width across the grid is
-                      recorded.
+                      of BCT's median window width across the grid is the
+                      instability of the level that the paper reports.
 Every specification, the main one included, is cleaned by trades.clean.
 
 Outputs (via klimafrac.results):
@@ -62,7 +62,7 @@ Outputs (via klimafrac.results):
   data/results/tiers_cleaning.csv      the cleaning grid
   data/results/tiers.json              every number the paper cites
 --quick uses 999 permutation draws and three grid points and writes the
-same files with a _quick suffix, so a test run never replaces the full outputs.
+same files with a _quick suffix, so a test run never replaces paper outputs.
 
 Usage:
     uv run python -m klimafrac.analysis.tiers
@@ -101,6 +101,9 @@ def require(*tokens: str) -> None:
         files = ", ".join(f"swaps_{k}.csv.gz" for k in missing)
         raise SystemExit(f"missing swap file(s) in {data('')}: {files}. "
                          "Build them with klimafrac.fetch.swaps first.")
+
+
+clean = trades.clean
 
 
 def isolated(cleaned: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
@@ -301,8 +304,7 @@ def main():
                                                           GRID_MAX_DEVIATION))
         rows_grid = []
         for min_usd, min_base, max_dev in grid:
-            frames = {t: trades.sample(trades.clean(raw[t], TOKENS[t], min_usd, min_base,
-                                                    max_dev))
+            frames = {t: trades.sample(clean(raw[t], TOKENS[t], min_usd, min_base, max_dev))
                       for t in TOKENS}
             win_g = pd.concat([window_table(frames[t], t) for t in TOKENS], ignore_index=True)
             label = f"min_usd={min_usd:g} min_base={min_base:g} max_dev={max_dev or 'off'}"
@@ -332,7 +334,8 @@ def main():
 
         # What the deviation filter actually removes, inside the estimation sample:
         # the count, and how many of those fall after the pool's first trading day.
-        sized = trades.clean(raw[BASE], TOKENS[BASE], max_deviation=None)
+        raw_base = trades.load(TOKENS[BASE])
+        sized = trades.clean(raw_base, TOKENS[BASE], max_deviation=None)
         lp = np.log(sized.price)
         med = lp.rolling(trades.ROLL_WINDOW, center=True,
                          min_periods=trades.ROLL_MIN_PERIODS).median()

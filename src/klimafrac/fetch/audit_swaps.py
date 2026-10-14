@@ -18,9 +18,8 @@ else corroborates.
                expected ones.
   ranges       complete block ranges are read back with eth_getLogs and
                compared with every row in those blocks, in order. Half the
-               ranges are centred on randomly drawn swaps; the rest sit on the
-               boundaries between stored chunks, where an error in chunking
-               would hide, topped up with uniformly drawn blocks.
+               ranges are drawn at random, and the rest sit on the boundaries
+               between stored chunks, where an error in chunking would hide.
   timestamps   a sample of rows is checked against the timestamp of its own
                block.
 
@@ -117,11 +116,12 @@ def audit(pool, meta: dict, swaps: pd.DataFrame, receipts: int) -> dict:
                                  "chain": chain_rows, "file": rows_of(mine),
                                  "log_index_outside_transaction": outside})
 
-    # complete ranges: random, plus the seams between stored chunks
+    # complete ranges: random, plus the seams between stored chunks. Chunks
+    # start at the pool's start block, so a seam is start + k * CHUNK_BOUNDARY
+    # (the first block of chunk k); a window centred there covers both sides.
     lo, hi = int(swaps.block.min()), int(swaps.block.max())
-    seams = [b for b in range(CHUNK_BOUNDARY * (lo // CHUNK_BOUNDARY),
-                              hi + CHUNK_BOUNDARY, CHUNK_BOUNDARY)
-             if lo <= b <= hi]
+    start = int(meta["start_block"])
+    seams = [b for b in range(start + CHUNK_BOUNDARY, hi + 1, CHUNK_BOUNDARY) if lo <= b <= hi]
     centres = ([int(x) for x in rng.choice(swaps.block.to_numpy(), RANGES // 2)]
                + [int(x) for x in rng.integers(lo, hi + 1, max(0, RANGES // 2 - len(seams)))]
                + seams)

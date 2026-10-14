@@ -1,13 +1,17 @@
 """
 Calibration of the staleness bias: what carrying the last price forward does
 to the estimated singularity spectrum when the generating process is known
-and held fixed (paper Section 3.4, Table 2).
+and held fixed (paper Section 4.1.2, Table tab:bias, Figure
+fig3_staleness_bias; the threshold it supports is used in Sections 3.2.2 and
+5.2).
 
 Process. Increments of a multifractal random walk (synthetic.mrw) with
 intermittency lambda2 and integral scale synthetic.INTEGRAL_SCALE, fixed
-across series lengths so that every N is a draw from the same process.
-lambda2 in {0.05, 0.10, 0.15}, base 0.10. The true spectrum gives h(q) =
-1/2 + lambda2 - lambda2 q / 2, so the positive-q width has a known target.
+across series lengths so that every N is a draw from the same process. The
+grid lambda2 in {0.05, 0.10, 0.15}, base 0.10, is the process the earlier
+calibration meant by nominal {0.10, 0.20, 0.30}: that generator realised half
+the stated intermittency. Its true spectrum gives h(q) = 1/2 + lambda2 -
+lambda2 q / 2, so the positive-q width has a known target.
 
 Staleness. Each interval contains a trade or not; a traded interval returns
 the whole price change accumulated since the previous trade and an untraded
@@ -31,8 +35,9 @@ Estimators (mfdfa.py, s_min = 10, s_max = N/10):
   width_pos   positive-side width, q in [0.5, 5]
   h_neg5      h(-5)
   width_ro    full-range width with exclude_flat=False, which keeps the
-              floating-point round-off residual of flat segments, so its
-              negative branch depends on machine precision
+              floating-point round-off residual of flat segments. Reported
+              only to document that the old pathology is a function of
+              machine precision, not a property of the data.
 
 Knee. For each (N, lambda2, clustering) the inflation curve is median width
 at p over median width at p = 0 (the p = 0 series have no staleness, so one
@@ -70,10 +75,11 @@ Outputs (via klimafrac.results):
   data/results/staleness_curves.csv         medians and inflation per cell
   data/results/staleness_knees.csv          knee, interval and prediction
                                             per (N, lambda2, clustering)
-  data/results/staleness_bias_table.csv     Table 2 (N = 20,000,
+  data/results/staleness_bias_table.csv     Table tab:bias (N = 20,000,
                                             lambda2 = 0.10, iid)
   data/results/staleness_informativeness.csv
-  data/results/staleness.json               cited numbers
+  data/results/staleness.json               every number the paper cites
+  figures/fig3_staleness_bias.png
 --quick runs 10 replications on a coarse p grid and writes the same files
 with a _quick suffix, so a test run never replaces paper outputs. The full
 run is 56,100 series, dominated by the N = 50,000 cells, and takes roughly
@@ -95,6 +101,7 @@ import numpy as np
 import pandas as pd
 
 from klimafrac.mfdfa import QS_POS, S_MIN, full_spectrum, positive_spectrum, segment_fluctuations
+from klimafrac.paths import figure
 from klimafrac.results import numbers, table
 from klimafrac.synthetic import INTEGRAL_SCALE, mrw
 
@@ -115,6 +122,11 @@ BASE_LAMBDA = 0.10
 KNEE_TOL = 1.10
 KNEE_TOL_LOOSE = 1.50
 BOOT_DRAWS = 1000
+# Hourly no-trade fractions of BCT and MCO2 (Section 3.2.2), shaded in the
+# figure as the range the empirical series occupy.
+OBSERVED_NOTRADE = (0.478, 0.736)
+# Nominal lambda2 of the earlier calibration and the value it realised.
+OLD_NOMINAL_LAMBDA = {0.10: 0.05, 0.20: 0.10, 0.30: 0.15}
 
 
 def label(run_length: int) -> str:
@@ -309,13 +321,65 @@ def informativeness(reps_df: pd.DataFrame) -> pd.DataFrame:
     for (n, lam), g in clean.groupby(["n", "lambda2"]):
         h = 0.5 + lam - lam * QS_POS / 2.0
         alpha = np.gradient(QS_POS * h - 1.0, QS_POS)
+        theory = float(alpha.max() - alpha.min())
         rows.append({"n": n, "lambda2": lam, "reps": len(g),
                      "width_pos": g.width_pos.median(),
                      "width_pos_q25": g.width_pos.quantile(0.25),
                      "width_pos_q75": g.width_pos.quantile(0.75),
-                     "width_pos_theory": float(alpha.max() - alpha.min()),
+                     "width_pos_theory": theory,
+                     "width_pos_mean": g.width_pos.mean(),
+                     "width_pos_sd": g.width_pos.std(ddof=1),
+                     "width_pos_bias": g.width_pos.mean() - theory,
+                     "width_pos_rmse": float(np.sqrt(((g.width_pos - theory) ** 2).mean())),
                      "width": g.width.median(), "h2": g.h2.median()})
     return pd.DataFrame(rows)
+
+
+# --- figure ------------------------------------------------------------------
+
+def plot(curve_df: pd.DataFrame, info_df: pd.DataFrame, path: str) -> None:
+    from klimafrac.plotstyle import ACCENT, INK2, MUTED, plt, style
+
+    ink2, muted = INK2, MUTED
+    blue, orange, green = ACCENT[:3]
+    colours = {"iid": blue, "markov5": orange, "markov20": green}
+    names = {"iid": "independent", "markov5": "clustered, mean quiet run 5",
+             "markov20": "clustered, mean quiet run 20"}
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11, 4.3))
+
+    base = curve_df[(curve_df.n == BASE_N) & np.isclose(curve_df.lambda2, BASE_LAMBDA)]
+    ax.axvspan(*OBSERVED_NOTRADE, color=muted, alpha=0.12, lw=0)
+    for clust in ("iid", "markov5", "markov20"):
+        c = base[base.clustering == clust].sort_values("p")
+        ax.plot(c.p, c.width, "-o", ms=3.5, lw=2, color=colours[clust],
+                label=rf"$\Delta\alpha$, {names[clust]}")
+        ax.plot(c.p, c.width_pos, "--", lw=1.4, color=colours[clust])
+    p0 = base[(base.clustering == "iid") & (base.p == 0)]
+    ax.axhline(float(p0.width.iloc[0]) * KNEE_TOL, color=muted, ls=":", lw=1.2)
+    ax.plot([], [], "--", color=ink2, lw=1.4, label=r"$\Delta\alpha^{+}$ (dashed)")
+    ax.set_xlabel("fraction of intervals with no trade, $p$")
+    ax.set_xlim(-0.02, max(P_GRID) + 0.02)
+    style(ax, "Spectrum width against no-trade fraction",
+          rf"MRW, $\lambda^2={BASE_LAMBDA:.2f}$, $N={BASE_N:,}$, held fixed as $p$ rises;"
+          "\nshaded: observed hourly staleness; dotted: "
+          rf"{KNEE_TOL:.2f}$\times$ the $p=0$ width", r"median width")
+    ax.legend(frameon=False, fontsize=8, loc="upper left")
+
+    info = info_df[info_df.n == BASE_N].sort_values("lambda2")
+    ax2.fill_between(info.lambda2, info.width_pos_q25, info.width_pos_q75,
+                     color=blue, alpha=0.15, lw=0)
+    ax2.plot(info.lambda2, info.width_pos, "-o", ms=4, lw=2, color=blue,
+             label=r"estimated $\Delta\alpha^{+}$ (median, IQR)")
+    ax2.plot(info.lambda2, info.width_pos_theory, "--", lw=1.4, color=ink2,
+             label="true width of the process")
+    ax2.set_xlabel(r"true intermittency $\lambda^2$")
+    style(ax2, "Positive-$q$ width against true intermittency",
+          rf"clean series ($p=0$), $N={BASE_N:,}$", None)
+    ax2.legend(frameon=False, fontsize=9, loc="upper left")
+
+    fig.tight_layout()
+    fig.savefig(path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
 
 
 # --- main --------------------------------------------------------------------
@@ -335,6 +399,7 @@ def cited_numbers(reps: int, ps, curve_df, knee_df, info_df, bias_df, runtime) -
         "design_markov_mean_quiet_runs": list(RUN_LENGTHS),
         "design_knee_tolerance": KNEE_TOL, "design_knee_tolerance_loose": KNEE_TOL_LOOSE,
         "design_bootstrap_draws": BOOT_DRAWS,
+        "design_old_nominal_to_true_lambda2": {f"{k:.2f}": v for k, v in OLD_NOMINAL_LAMBDA.items()},
         "design_series_simulated": int(runtime["series"]),
         "runtime_seconds": runtime["seconds"],
     }
@@ -399,6 +464,12 @@ def cited_numbers(reps: int, ps, curve_df, knee_df, info_df, bias_df, runtime) -
             if len(hit):
                 out[f"base_{clust}_p{round(p_at * 100):03d}_inflation"] = hit.inflation.iloc[0]
                 out[f"base_{clust}_p{round(p_at * 100):03d}_width"] = hit.width.iloc[0]
+    obs = base[(base.clustering == "iid") & (base.p >= OBSERVED_NOTRADE[0] - 0.03)
+               & (base.p <= OBSERVED_NOTRADE[1] + 0.03)]
+    out["base_iid_observed_range_width_min"] = obs.width.min()
+    out["base_iid_observed_range_width_max"] = obs.width.max()
+    out["base_iid_observed_range_width_ro_min"] = obs.width_ro.min()
+    out["base_iid_observed_range_width_ro_max"] = obs.width_ro.max()
 
     for n, g in info_df.groupby("n"):
         g = g.sort_values("lambda2")
@@ -410,6 +481,9 @@ def cited_numbers(reps: int, ps, curve_df, knee_df, info_df, bias_df, runtime) -
         out[f"{pre}_monotone"] = bool(np.all(np.diff(g.width_pos) > 0))
         for _, r in g.iterrows():
             out[f"{pre}_lambda2_{r.lambda2:.3f}_width_pos"] = r.width_pos
+            out[f"{pre}_lambda2_{r.lambda2:.3f}_width_pos_bias"] = r.width_pos_bias
+            out[f"{pre}_lambda2_{r.lambda2:.3f}_width_pos_sd"] = r.width_pos_sd
+            out[f"{pre}_lambda2_{r.lambda2:.3f}_width_pos_rmse"] = r.width_pos_rmse
     return out
 
 
@@ -451,9 +525,11 @@ def main():
     table("staleness_knees" + suffix, knee_df)
     table("staleness_bias_table" + suffix, bias_df)
     table("staleness_informativeness" + suffix, info_df)
+    fig_path = figure(f"fig3_staleness_bias{suffix}.png")
+    plot(curve_df, info_df, fig_path)
 
     pd.set_option("display.width", 200)
-    print("\nTable 2  (N = 20,000, lambda2 = 0.10, independent inactivity)")
+    print("\nTable tab:bias  (N = 20,000, lambda2 = 0.10, independent inactivity)")
     print(bias_df[["p", "zero_frac", "width", "inflation", "width_pos", "h_neg5",
                    "width_ro", "inflation_ro", "h_neg5_ro"]].round(3).to_string(index=False))
     print(f"\nKnee: smallest p with median inflation > {KNEE_TOL} (interpolated, 90% bootstrap)")
@@ -467,6 +543,7 @@ def main():
     out = cited_numbers(reps, ps, curve_df, knee_df, info_df, bias_df,
                         {"seconds": round(seconds), "series": len(todo)})
     print("\nwrote", numbers("staleness" + suffix, out))
+    print("wrote", fig_path)
 
 
 if __name__ == "__main__":

@@ -37,6 +37,7 @@ def permutation_test(a, b, draws: int = DRAWS, seed: int = SEED) -> dict:
 
     if assignments <= draws:
         hits = 0
+        index = np.arange(n)
         for chosen in combinations(range(n), n_a):
             mask = np.zeros(n, bool)
             mask[list(chosen)] = True

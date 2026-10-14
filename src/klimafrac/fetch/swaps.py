@@ -1,7 +1,7 @@
 """
 Swap-level trade history, decoded from each pool's own events.
 
-Every reconstructed price starts here. One output row is one Swap event, and
+Every price in the paper starts here. One output row is one Swap event, and
 rows are ordered by (block, log_index), which is execution order.
 
 Three stages per pool, each resumable and pinned to a fixed end block:
@@ -23,11 +23,17 @@ Three stages per pool, each resumable and pinned to a fixed end block:
 
 Two checks make the result verifiable rather than merely plausible:
 
-  reserve path   a constant-product pair emits Sync with its reserves before
-                 each Swap, Mint or Burn, so the change in reserves between
+  reserve path   a constant-product pair emits Sync, carrying the reserves
+                 that result from an event, just before the Swap, Mint or
+                 Burn log of that event, so the change in reserves between
                  consecutive Syncs must equal the amounts of the event between
-                 them. Walking the whole log stream that way proves no event
-                 is missing anywhere in the window, which sampling cannot.
+                 them. Walking the whole log stream that way proves that no
+                 Sync is missing anywhere in the window, which sampling
+                 cannot, and that every event between two Syncs is the one
+                 the reserves record. An event whose own log were missing
+                 beside its Sync would leave two Syncs with no event between
+                 them and reserves that moved; that case is counted
+                 (sync_with_reserve_change) and is zero in every pool.
                  A burn is the one event that can legitimately fall short of
                  the identity, because it pays out a share of tokens sent to
                  the pair since the last Sync that it does not report; those
@@ -54,9 +60,6 @@ Output data/swaps_<chain>_<SYMBOL>.csv.gz:
   side                         sell if the trader sold base to the pool
   source                       always "log"
   base_raw, quote_raw          the same net amounts as exact integers
-
-data/swaps_manifest.json records, per pool, the pool identity, block range,
-fetch parameters, check counts, checksums and RPC spend.
 
 Under data/raw/<chain>/<SYMBOL>/: logs/ and transfers/ chunks, pool.json,
 params.json (the fetch parameters and code hash a chunk was written under; a
@@ -103,6 +106,7 @@ AERODROME_BURN = keccak_hex("Burn(address,address,uint256,uint256)")
 MINT = keccak_hex("Mint(address,uint256,uint256)")
 FEES = keccak_hex("Fees(address,uint256,uint256)")
 
+SWAP_TOPIC = {"sushiswap": V2_SWAP, "quickswap": V2_SWAP, "aerodrome": AERODROME_SWAP}
 EVENT_NAMES = {
     V2_SWAP: "swap", AERODROME_SWAP: "swap",
     V2_SYNC: "sync", AERODROME_SYNC: "sync",
@@ -571,8 +575,10 @@ def net_flow(flow: dict, after: int, until: int) -> tuple[int, int]:
 def reconcile(logs: pd.DataFrame, transfers: pd.DataFrame, meta: dict) -> dict:
     """
     Walk the reserve path: reserves change by exactly the amounts of the event
-    that follows each Sync. A missing log breaks the chain, so this proves
-    completeness over the whole window rather than over a sample.
+    that follows each Sync. A missing Sync breaks the chain, and a missing
+    event leaves reserves that moved between two Syncs with nothing between
+    them, so together the two counts establish completeness over the whole
+    window rather than over a sample.
 
     On Aerodrome the fee leaves the pool inside the swap, so the fee of the
     same transaction is subtracted before comparing.
@@ -589,7 +595,7 @@ def reconcile(logs: pd.DataFrame, transfers: pd.DataFrame, meta: dict) -> dict:
     """
     base_is_token0 = meta["base_is_token0"]
     flow = token_flow(transfers)
-    checked = breaks = sync_without_event = donations = 0
+    checked = breaks = sync_without_event = sync_with_reserve_change = donations = 0
     donated = [0, 0]
     first_break = None
     previous = current = None                      # reserves before / after
@@ -605,9 +611,18 @@ def reconcile(logs: pd.DataFrame, transfers: pd.DataFrame, meta: dict) -> dict:
             fee = [fee[0] + charged[0], fee[1] + charged[1]]
             continue
         if row.event == "sync":
+            new = decode_pair(row.data, base_is_token0)
             if pending:
-                sync_without_event += 1            # a donation, or skim/sync
-            previous, current = current, decode_pair(row.data, base_is_token0)
+                sync_without_event += 1            # a skim() or sync() call
+                if previous is not None and current != previous:
+                    # The unconsumed Sync changed the reserves relative to the
+                    # Sync before it, and no event followed it: either that
+                    # event's log is missing, or tokens were sent to the pair
+                    # and sync() called. Counted and reported; zero in every
+                    # pool fetched. (A plain sync() call, as routers make
+                    # before a swap, leaves the reserves unchanged.)
+                    sync_with_reserve_change += 1
+            previous, current = current, new
             at_previous, at_current = at_current, position(int(row.block),
                                                            int(row.log_index))
             pending = True
@@ -640,6 +655,7 @@ def reconcile(logs: pd.DataFrame, transfers: pd.DataFrame, meta: dict) -> dict:
                            "shortfall": [str(s) for s in short]}
     return {"reconciled": checked, "breaks": breaks,
             "sync_without_event": sync_without_event,
+            "sync_with_reserve_change": sync_with_reserve_change,
             "burns_after_donation": donations,
             "donated_raw": [str(d) for d in donated],
             "first_break": first_break}
@@ -739,7 +755,7 @@ def build(pool: Pool, meta: dict, logs: pd.DataFrame,
     # surplus over the reserves to whoever asks, transferring without emitting
     # anything and without touching the reserves. Those transactions are
     # counted rather than treated as a fault, because the reserve path already
-    # proves no event is missing. Zero-value transfers are ignored throughout:
+    # accounts for every event. Zero-value transfers are ignored throughout:
     # anyone may call transferFrom(pair, victim, 0) on a token that permits it,
     # and address-poisoning spam does exactly that.
     explained = set(logs.loc[logs.event.isin(("swap", "burn", "fees")), "tx_hash"])
@@ -780,6 +796,9 @@ def build(pool: Pool, meta: dict, logs: pd.DataFrame,
     }
     if counts["breaks"]:
         raise ValueError(f"{pool.key}: reserve path breaks at {counts['first_break']}")
+    if counts["sync_with_reserve_change"]:
+        raise ValueError(f"{pool.key}: reserves moved between {counts['sync_with_reserve_change']} "
+                         "pairs of consecutive Syncs with no event between them")
     return df[OUTPUT_COLUMNS], counts
 
 
@@ -790,7 +809,7 @@ def chunk_inventory(pool: Pool, meta: dict) -> list[dict]:
     for kind, size in (("logs", LOG_CHUNK), ("transfers", TRANSFER_CHUNK)):
         for path in sorted(pool_path(pool, kind).glob("*.csv.gz")):
             out.append({"file": f"{kind}/{path.name}", "sha256": sha256(str(path)),
-                        "rows": int(path.stat().st_size and
+                        "rows": int(sum(1 for _ in open(path, "rb")) and
                                     len(pd.read_csv(path, usecols=[0])))})
     return out
 

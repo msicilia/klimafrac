@@ -10,7 +10,7 @@ implementation to check. For a series x of length N:
             F^2(v, s) is the mean squared residual
   moments   F_q(s) = { mean_v [F^2(v,s)]^(q/2) }^(1/q),  q != 0
   scaling   h(q) is the least-squares slope of log F_q(s) on log s over
-            up to 20 log-spaced integer scales from s_min = 10 to s_max
+            20 log-spaced scales from s_min = 10 to s_max
   spectrum  tau(q) = q h(q) - 1, alpha = d tau / d q, f = q alpha - tau
 
 Flat segments. Where every return inside a segment is identical -- in a
@@ -25,13 +25,16 @@ precision, and is available only to demonstrate that.
 
 Two q ranges:
   QS      -5 to 5 in steps of 0.5, excluding 0
-  QS_POS  0.5 to 5; the positive-side width uses only these
+  QS_POS  0.5 to paths.Q_MAX (3 unless KLIMAFRAC_QMAX says otherwise); the
+          positive-side width uses only these
 """
 
 import numpy as np
 
+from klimafrac.paths import Q_MAX
+
 QS = np.concatenate([np.arange(-5, 0, 0.5), np.arange(0.5, 5.5, 0.5)])
-QS_POS = np.arange(0.5, 5.5, 0.5)
+QS_POS = np.arange(0.5, Q_MAX + 0.25, 0.5)        # 0.5 to paths.Q_MAX
 S_MIN = 10
 N_SCALES = 20
 POLY_ORDER = 1
@@ -63,9 +66,11 @@ def segment_fluctuations(x: np.ndarray, profile: np.ndarray, s: int,
     return np.concatenate(f2), np.concatenate(flat)
 
 
-def mfdfa(x, s_min: int = S_MIN, s_max: int | None = None, qs=QS,
-          order: int = POLY_ORDER, exclude_flat: bool = True):
-    """Generalised Hurst exponents. Returns (scales, h), or (None, None)."""
+def fluctuation_functions(x, s_min: int = S_MIN, s_max: int | None = None, qs=QS,
+                          order: int = POLY_ORDER, exclude_flat: bool = True,
+                          n_scales: int = N_SCALES):
+    """F_q(s) on the scale grid. Returns (scales, F) with F[i, j] = F_{q_j}(s_i),
+    or (None, None) when fewer than five scales can be evaluated."""
     x = np.asarray(x, dtype=float)
     if not np.all(np.isfinite(x)):
         raise ValueError("series contains non-finite values")
@@ -75,7 +80,7 @@ def mfdfa(x, s_min: int = S_MIN, s_max: int | None = None, qs=QS,
     qs = np.asarray(qs, dtype=float)
 
     used, fq = [], []
-    for s in scales(n, s_min, s_max):
+    for s in scales(n, s_min, s_max, n_scales):
         res = segment_fluctuations(x, profile, int(s), order)
         if res is None:
             continue
@@ -98,10 +103,17 @@ def mfdfa(x, s_min: int = S_MIN, s_max: int | None = None, qs=QS,
 
     if len(used) < 5:
         return None, None
-    used = np.array(used)
+    return np.array(used), np.array(fq)
+
+
+def mfdfa(x, s_min: int = S_MIN, s_max: int | None = None, qs=QS,
+          order: int = POLY_ORDER, exclude_flat: bool = True, n_scales: int = N_SCALES):
+    """Generalised Hurst exponents. Returns (scales, h), or (None, None)."""
+    used, fq = fluctuation_functions(x, s_min, s_max, qs, order, exclude_flat, n_scales)
+    if used is None:
+        return None, None
     logs = np.log(used)
-    fq = np.array(fq)
-    h = np.array([np.polyfit(logs, np.log(fq[:, i]), 1)[0] for i in range(len(qs))])
+    h = np.array([np.polyfit(logs, np.log(fq[:, i]), 1)[0] for i in range(fq.shape[1])])
     return used, h
 
 
@@ -126,7 +138,13 @@ def full_spectrum(x, s_max_div: int, exclude_flat: bool = True) -> dict | None:
 
 
 def positive_spectrum(x, s_max_div: int, min_n: int = 400) -> dict | None:
-    """h(1), h(2), h(5) and the width of the spectrum over q in [0.5, 5]."""
+    """h(1), h(2), h(q_max) and the width of the spectrum over q in [0.5, Q_MAX].
+
+    alpha is the numerical derivative of tau(q) = q h(q) - 1 on the q grid:
+    central differences inside the grid and one-sided differences at its two
+    ends, so the end values are the secant slopes over the first and the last
+    half-step. The width is the range of that alpha over the grid.
+    """
     x = np.asarray(x, dtype=float)
     if len(x) < min_n:
         return None
@@ -137,7 +155,7 @@ def positive_spectrum(x, s_max_div: int, min_n: int = 400) -> dict | None:
     return {"n": len(x),
             "h1": float(h[QS_POS == 1.0][0]),
             "h2": float(h[QS_POS == 2.0][0]),
-            "h5": float(h[-1]),
+            f"h{Q_MAX:g}": float(h[-1]),
             "width_pos": float(alpha.max() - alpha.min())}
 
 
@@ -149,6 +167,25 @@ def phase_randomise(x: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     phases = rng.uniform(0, 2 * np.pi, len(f))
     phases[0] = 0.0
     return np.fft.irfft(np.abs(f) * np.exp(1j * phases), n=len(x))
+
+
+def surrogate_null(x, s_max_div: int, n_iter: int = 1000, seed: int = 0):
+    """
+    Full-range widths of length-matched shuffled and phase-randomised
+    surrogates. Shuffling keeps the distribution and destroys temporal
+    structure; phase randomisation keeps linear correlation and Gaussianises.
+    """
+    x = np.asarray(x, dtype=float)
+    rng = np.random.default_rng(seed)
+    shuffled, phased = [], []
+    for _ in range(n_iter):
+        r = full_spectrum(rng.permutation(x), s_max_div)
+        if r is not None:
+            shuffled.append(r["width"])
+        r = full_spectrum(phase_randomise(x, rng), s_max_div)
+        if r is not None:
+            phased.append(r["width"])
+    return np.array(shuffled), np.array(phased)
 
 
 # --- validation ------------------------------------------------------------
@@ -175,7 +212,9 @@ def validate(n: int = 2000, reps: int = 20, s_max_div: int = 10, tol: float = 0.
 
 
 if __name__ == "__main__":
-    # Writes the recovered exponents to data/results/mfdfa_validation.json.
+    # The manuscript quotes what the estimator recovers on synthetic series
+    # with a known exponent, so the check writes its numbers out like any
+    # other result rather than only printing them.
     from klimafrac.results import numbers
 
     design = {"n": 2000, "reps": 20, "s_max_div": 10, "tol": 0.05}

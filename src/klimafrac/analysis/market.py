@@ -1,13 +1,15 @@
 """
 How large was each carbon tier's market? Table 1 and the magnitudes of
-Sections 3.1 and 3.2.
+Section 3.1.
 
-Swap counts, dollar volume, cleaning shares and the checks behind the $0.10
-threshold. Trades come from trades.load and trades.clean over each pool's
-full data window; a quantity is restricted to the estimation sample or to a
-calendar year only where its name says so.
+A swap is not a fixed quantity, so swap counts alone misstate how unequal
+these markets were. This module puts the cleaning, the dollar volume and the
+justification of the $0.10 threshold beside the counts. Trades come from
+trades.load and trades.clean over each pool's full data window; a quantity is
+restricted to the estimation sample or to a calendar year only where its name
+says so.
 
-  TIERS       Table 1: raw and usable swaps, USD volume of the
+  TIERS       Table 1 (tab:tiers): raw and usable swaps, USD volume of the
               usable swaps, first and last usable trade, median usable trade
               size, and whether a stablecoin pair exists. Also the share of
               raw swaps each cleaning stage removes, and the share of usable
@@ -22,21 +24,20 @@ Design choices
   - Dollar value is trades.usd_value: |quote_amt| for USDC-quoted pools, and
     for UBO and NBO the KLIMA leg at the nearest cleaned KLIMA price. Every
     dollar figure, the UBO and NBO median trade size included, is over usable
-    swaps.
+    swaps, as the Table 1 caption states.
   - Cleaning shares follow the order in which trades.clean applies its
     filters and are all shares of raw swaps, so the two stages add up to the
     total. The size stage also drops swaps without a positive price; a swap
     failing both size and deviation filters counts under size.
   - Stable pair is read from data/market_existence.csv
-    (fetch/market_existence.py): one row per factory lookup, with columns
-    chain, tier, quote and pool (empty when no pool exists). A token has a
-    stable pair if any Polygon row has a stablecoin quote and a pool address.
-    Without the file the column is left out; with a different schema the
-    module stops.
-  - Price by size bucket uses NCT swaps in 2025, with a positive price and
-    the MIN_BASE floor but no deviation filter, so the comparison is not
-    shaped by the filter it is meant to justify. Rows with no filter at all
-    are included beside it.
+    (fetch/market_existence.py): one row per pair found on a factory, with
+    columns tier, quote and pool. A token has a stable pair if any row has a
+    stablecoin quote and a pool address. Without the file the column is left
+    out; with a different schema the module stops.
+  - Price by size bucket uses NCT swaps in 2025, the year the paper names,
+    with a positive price and the MIN_BASE floor but no deviation filter, so
+    the comparison is not shaped by the filter it is meant to justify. Rows
+    with no filter at all are included beside it.
   - Autocorrelation uses NCT over the full data window, where the deviation
     filter is defined. At each threshold every other filter is as in
     trades.clean, recomputed on the swaps surviving that threshold; "no
@@ -90,11 +91,10 @@ def stable_pairs() -> dict[str, bool] | None:
     if not os.path.exists(path):
         return None
     census = pd.read_csv(path)
-    absent = {"chain", "tier", "quote", "pool"} - set(census.columns)
+    absent = {"tier", "quote", "pool"} - set(census.columns)
     if absent:
         raise SystemExit(f"{path} lacks columns {sorted(absent)}")
-    stable = census[(census["chain"] == "polygon") & census["quote"].isin(STABLES)
-                    & census["pool"].notna()]
+    stable = census[census["quote"].isin(STABLES) & census["pool"].notna()]
     return {t: t in set(stable.tier) for t in TOKENS}
 
 
@@ -237,7 +237,7 @@ def threshold_numbers(thresholds: pd.DataFrame) -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--token", action="append", choices=TOKENS,
-                        help="restrict to these tokens; prints only, writes nothing")
+                        help="restrict to these tokens; prints and writes nothing")
     args = parser.parse_args()
     tokens = [t for t in TOKENS if t in (args.token or TOKENS)]
     require(tokens)

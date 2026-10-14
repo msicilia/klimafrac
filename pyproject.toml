@@ -1,9 +1,8 @@
 [project]
 name = "klimafrac"
 version = "1.0.0"
-description = "Code for 'Thin Trading and the Singularity Spectrum: Evidence from Tokenized Carbon Markets'"
+description = "Code for 'Comparative Complexity of Green and Conventional Crypto Assets: Multifractal Evidence from Tokenized Carbon Markets'"
 readme = "README.md"
-license = "MIT"
 authors = [
     { name = "Alberto Ballesteros-Rodríguez", email = "alberto.ballesterosr@uah.es" },
     { name = "Lino González-García", email = "lino.gonzalez@uah.es" },

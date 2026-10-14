@@ -1,7 +1,8 @@
 """
 Calendar-time estimates on the reconstructed pools and on the aggregator's
 series, and how stale the aggregator's series is against the trades (paper
-Sections 3.2 and 4.1: Table 3 and Table A1).
+Sections 3.1 and 4.1.1: Tables tab:daily and tab:hourly, Figures
+fig1_staleness and fig2_hq; the hourly N and observed widths cited in 4.1.2).
 
 Series. For each token the pool's cleaned trades in the estimation sample
 (trades.trades) are put on a daily and an hourly grid (trades.calendar): from
@@ -24,18 +25,20 @@ show that the conclusion does not depend on the half-step ambiguity of the
 vendor's +/- 30 min search window.
 
 Estimators (mfdfa.py, s_min = 10):
-  full range   q in [-5, 5]; daily s_max = N/4 as in Table A1, hourly
+  full range   q in [-5, 5]; daily s_max = N/4 as in Table tab:daily, hourly
                s_max = N/10. Flat segments are excluded from the negative
-               moments. The same fit with exclude_flat=False is reported in
-               *_ro columns: it keeps the ~1e-30 floating-point residual of
-               flat segments, so its negative branch depends on machine
-               precision.
+               moments (the corrected estimator). The same fit with
+               exclude_flat=False is reported in *_ro columns: it keeps the
+               ~1e-30 floating-point residual of flat segments, so its
+               negative branch depends on machine precision, and it is what
+               earlier versions of this analysis reported.
   positive q   q in [0.5, 5], s_max = N/10 at both frequencies.
 
 Surrogates. Every width -- full range and positive side, daily and hourly,
 both sources -- is set against 1,000 shuffled and 1,000 phase-randomised
-surrogates of identical length. Each draw is evaluated with both
-full_spectrum and positive_spectrum, so the two widths share a null.
+surrogates of identical length. The draws are exactly those of
+mfdfa.surrogate_null(x, s_max_div, n, seed); each draw is evaluated with
+both full_spectrum and positive_spectrum, so the two widths share a null.
 The seed is crc32 of "<freq>/<source>/<token>", so a series' null does not
 depend on which other series are run or in what order.
 
@@ -56,11 +59,13 @@ Vendor staleness (hourly, on each pool's grid):
 The "all" row pools the counts of the four tokens.
 
 Outputs (suffix _quick with --quick):
-  data/results/calendar_daily.csv            Table A1 and the daily columns
-                                             of Table 3
-  data/results/calendar_hourly.csv           hourly columns of Table 3
-  data/results/calendar_vendor_staleness.csv vendor staleness (Section 3.2)
+  data/results/calendar_daily.csv            Table tab:daily and the daily
+                                             columns of tab:hourly
+  data/results/calendar_hourly.csv           Table tab:hourly, the hourly
+                                             full-range widths
+  data/results/calendar_vendor_staleness.csv Figure 1 and its text
   data/results/calendar.json                 cited numbers
+  figures/fig1_staleness.png, figures/fig2_hq.png
 
 Usage:
     uv run python -m klimafrac.analysis.calendar
@@ -79,8 +84,9 @@ import numpy as np
 import pandas as pd
 
 from klimafrac import trades
-from klimafrac.mfdfa import full_spectrum, phase_randomise, positive_spectrum
-from klimafrac.paths import data
+from klimafrac.mfdfa import QS, QS_POS, full_spectrum, mfdfa, phase_randomise, positive_spectrum
+from klimafrac.paths import data, figure
+from klimafrac.plotstyle import INK, INK2, MUTED, SERIES, plt, save, style
 from klimafrac.results import numbers, table
 
 TOKENS = {"BCT": "polygon_BCT", "NCT": "polygon_NCT",
@@ -157,7 +163,7 @@ def estimate(x: np.ndarray, freq: str) -> dict:
 
 
 def surrogate_task(task: tuple) -> tuple:
-    """Shuffled and phase-randomised draws, each evaluated on both widths."""
+    """Draws of mfdfa.surrogate_null, each evaluated on both widths."""
     label, x, freq, n_iter, seed = task
     rng = np.random.default_rng(seed)
     out = {k: [] for k in ("shuffled", "shuffled_pos", "phase", "phase_pos")}
@@ -266,6 +272,61 @@ def staleness_table(tokens) -> pd.DataFrame:
     return df
 
 
+# --- figures ---------------------------------------------------------------
+
+def fig_staleness(st: pd.DataFrame, path: str) -> None:
+    st = st[st.token != "all"].reset_index(drop=True)
+    x = np.arange(len(st))
+    fig, ax = plt.subplots(figsize=(9, 4.4))
+    ax.bar(x - 0.19, st.vendor_zero_pct, 0.36, color=MUTED,
+           label="aggregated series: no price change")
+    ax.bar(x + 0.19, st.matched_no_trade_pct, 0.36,
+           color=[SERIES[t] for t in st.token], label="pool: no transaction")
+    top = float(st[["vendor_zero_pct", "matched_no_trade_pct"]].to_numpy().max())
+    for i, r in st.iterrows():
+        ax.text(i - 0.19, r.vendor_zero_pct + top * 0.015, f"{r.vendor_zero_pct:.1f}%",
+                ha="center", va="bottom", fontsize=9, color=INK2)
+        ax.text(i + 0.19, r.matched_no_trade_pct + top * 0.015, f"{r.matched_no_trade_pct:.1f}%",
+                ha="center", va="bottom", fontsize=9, color=INK, fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(st.token)
+    ax.set_ylim(0, top * 1.18)
+    style(ax, "Apparent and true staleness, hourly",
+          f"Hours with both vendor bars present; the pool's no-trade share is "
+          f"{st.understatement_ratio.min():.1f} to {st.understatement_ratio.max():.1f} "
+          f"times the vendor's zero-change share",
+          "% of hours")
+    ax.legend(frameon=False, loc="upper left", fontsize=9)
+    save(fig, path)
+
+
+def fig_hq(tokens, path: str) -> None:
+    """h(q) on hourly data, corrected estimator only.
+
+    The uncorrected variant (exclude_flat=False, the *_ro columns) was dropped
+    from the manuscript in September 2026 as a detail about floating point
+    rather than about these markets. It is still computed and stored, so the
+    dashed series can be restored here if a reviewer asks for it.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
+    for token in tokens:
+        x = series(token, "hourly", "reconstructed").to_numpy()
+        s_max = len(x) // POS_S_MAX_DIV
+        _, h = mfdfa(x, s_max=s_max, qs=QS)
+        _, h_pos = mfdfa(x, s_max=s_max, qs=QS_POS)
+        axes[0].plot(QS, h, color=SERIES[token], lw=2, label=token)
+        axes[1].plot(QS_POS, h_pos, color=SERIES[token], lw=2, label=token)
+    for ax in axes:
+        ax.axhline(0.5, color=MUTED, lw=1, ls=":")
+        ax.set_xlabel("q")
+    style(axes[0], "Full range, q in [-5, 5]", "dotted line: h = 0.5", "h(q)")
+    style(axes[1], "Positive branch, q in [0.5, 5]", "dotted line: h = 0.5")
+    for ax in axes:
+        ax.legend(frameon=False, fontsize=9)
+    fig.tight_layout()
+    save(fig, path)
+
+
 # --- cited numbers ---------------------------------------------------------
 
 def span(df: pd.DataFrame, col: str) -> dict:
@@ -325,7 +386,7 @@ def print_tables(est: pd.DataFrame, st: pd.DataFrame) -> None:
     pd.set_option("display.max_columns", 40)
     for freq in FREQS:
         g = est[est.freq == freq]
-        print(f"\nTable {'A1' if freq == 'daily' else '3 (and full range)'}"
+        print(f"\nTable {'tab:daily' if freq == 'daily' else 'tab:hourly (and full range)'}"
               f" -- {freq}, full range s_max = N/{FULL_S_MAX_DIV[freq]}, positive q s_max = N/10")
         print(g[["source", "token", "window_start", "n", "zero_return_pct", "no_trade_pct",
                  "width", "alpha0", "width_shuffled_p95", "width_phase_p95", "width_rel_bct",
@@ -359,6 +420,9 @@ def main():
     print(f"{len(tokens)} tokens, {n_surrogates} surrogates of each kind, {args.workers} workers")
     est = estimates(tokens, n_surrogates, args.workers)
     st = staleness_table(tokens)
+    fig1, fig2 = figure(f"fig1_staleness{suffix}.png"), figure(f"fig2_hq{suffix}.png")
+    fig_staleness(st, fig1)
+    fig_hq(tokens, fig2)
     seconds = time.time() - t0
 
     table("calendar_daily" + suffix, est[est.freq == "daily"].drop(columns="freq"))
@@ -377,7 +441,7 @@ def main():
             "seed_rule": "crc32('<freq>/<source>/<token>')",
             "runtime_seconds": round(seconds)}
     print("\nwrote", numbers("calendar" + suffix, cited_numbers(est, st, meta)))
-    print(f"runtime {seconds:.0f}s")
+    print("wrote", fig1, fig2, f"\nruntime {seconds:.0f}s")
 
 
 if __name__ == "__main__":

@@ -5,9 +5,10 @@ is indistinguishable from a real finding. Every call here either returns the
 node's answer or raises `RpcError` after bounded retries.
 
 Endpoints:
-  polygon      Alchemy, free tier (key in ALCHEMY_KEY or .env at the
-               repository root)
+  polygon      Alchemy, free tier (key in ALCHEMY_KEY or code/.env)
   base         Alchemy, free tier
+  base-public  the public Base RPC, which serves eth_getLogs over
+               2,000-block ranges without a key
 """
 
 import os
@@ -31,12 +32,13 @@ def alchemy_key() -> str:
         for line in env.read_text().splitlines():
             if line.startswith("ALCHEMY_KEY="):
                 return line.split("=", 1)[1].strip()
-    raise RpcError("ALCHEMY_KEY not set (environment or .env)")
+    raise RpcError("ALCHEMY_KEY not set (environment or code/.env)")
 
 
 ENDPOINTS = {
     "polygon": lambda: f"https://polygon-mainnet.g.alchemy.com/v2/{alchemy_key()}",
     "base": lambda: f"https://base-mainnet.g.alchemy.com/v2/{alchemy_key()}",
+    "base-public": lambda: "https://mainnet.base.org",
 }
 
 # Errors worth retrying: rate limits and transient server faults. A request
