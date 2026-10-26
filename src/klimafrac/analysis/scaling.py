@@ -93,7 +93,7 @@ def plot(shown: dict, path: str) -> None:
             ax.plot(logs, slope * logs + intercept, color=colour, lw=1.2, zorder=2)
             ax.scatter(logs, y, s=22, color=colour, zorder=3, label=f"$q={q:g}$")
         style(ax)
-        ax.set_title(title, loc="left", fontsize=10)
+        ax.set_title(title, loc="left", fontsize=9)
         ax.text(0.97, 0.05, rf"$\Delta\alpha^{{+}}={d['width']:.3f}$", transform=ax.transAxes,
                 ha="right", fontsize=9, color=INK2)
     for ax in axes[:, 0]:
@@ -134,16 +134,19 @@ def main() -> None:
     # the window whose width is its group's median, one per panel
     shown = {}
     one = win[win.q == SHOWN[0]]
-    for (clock, group), label in ((("hourly", "carbon"), "carbon, hourly"),
-                                  (("hourly", "thin"), "thin conventional, hourly"),
-                                  (("hourly", "deep"), "deep conventional, hourly"),
-                                  (("transaction", "BCT"), "BCT, transaction time"),
-                                  (("transaction", "NCT"), "NCT, transaction time"),
-                                  (("transaction", "MCO2"), "MCO2, transaction time")):
+    # the caption names the clocks, so the titles name only the group and
+    # the window shown; the ladder tokens are their own group
+    for (clock, group), label in ((("hourly", "carbon"), "carbon"),
+                                  (("hourly", "thin"), "thin conventional"),
+                                  (("hourly", "deep"), "deep conventional"),
+                                  (("transaction", "BCT"), "BCT"),
+                                  (("transaction", "NCT"), "NCT"),
+                                  (("transaction", "MCO2"), "MCO2")):
         g = one[(one.clock == clock) & (one.group == group)]
         pick = g.iloc[(g.width - g.width.median()).abs().argsort().iloc[0]]
-        shown[f"{label} ({pick.token}, window {pick.window})"] = drawings[
-            (clock, group, pick.token, pick.window)]
+        detail = (f"window {pick.window}" if clock == "transaction"
+                  else f"{pick.token}, window {pick.window}")
+        shown[f"{label} ({detail})"] = drawings[(clock, group, pick.token, pick.window)]
 
     out = {"scaling.price": PRICE, "scaling.poor_below_r2": POOR}
     # Does a poor fit at the top of the customary range go with a wide window?

@@ -1,6 +1,6 @@
 """
-How large was each carbon tier's market? Table 1 and the magnitudes of
-Section 3.1.
+How large was each carbon tier's market? Table 1 (tab:tiers) and the
+magnitudes quoted beside it.
 
 A swap is not a fixed quantity, so swap counts alone misstate how unequal
 these markets were. This module puts the cleaning, the dollar volume and the

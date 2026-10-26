@@ -298,6 +298,11 @@ def summarise(result: pd.DataFrame) -> None:
         out[f"thin_robustness.{c}.token_p_max"] = float(g.token_p.max())
         out[f"thin_robustness.{c}.rank_p_max"] = float(g.rank_p.max())
         out[f"thin_robustness.{c}.complete_separation"] = int(g.second_above_every_first.sum())
+        # variants where either token-level test rejects, and how many of
+        # them are dollar floors of 2 and above, both cited by the paper
+        sig = g[(g.token_p < ALPHA) | (g.rank_p < ALPHA)]
+        out[f"thin_robustness.{c}.significant_variants"] = int(len(sig))
+        out[f"thin_robustness.{c}.significant_at_floor_ge_2"] = int((sig.min_usd >= 2).sum())
     for r in result.itertuples():
         pre = f"thin_robustness.{r.family}.{r.spec}.{r.contrast}."
         out[pre + "gap"], out[pre + "token_p"], out[pre + "rank_p"] = (

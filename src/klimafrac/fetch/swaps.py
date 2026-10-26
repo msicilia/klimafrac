@@ -245,7 +245,7 @@ def pool_path(pool: Pool, *parts: str) -> Path:
 
 def write_csv_atomic(df: pd.DataFrame, path: Path) -> None:
     """Deterministic bytes: the gzip header carries no timestamp, so the same
-    data always hashes the same and a reviewer can compare checksums."""
+    data always hashes the same and checksums can be compared across runs."""
     tmp = path.with_name(path.name + ".tmp")
     df.to_csv(tmp, index=False, compression={"method": "gzip", "mtime": 0})
     with open(tmp, "rb") as f:

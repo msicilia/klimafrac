@@ -58,7 +58,7 @@ def plot_benchmark(win: pd.DataFrame, tokens: pd.DataFrame, path: str) -> None:
     ax.set_yticklabels(labels, fontsize=7.5)
     ax.set_ylim(-1.0, y - 1.4)
     ax.invert_yaxis()
-    ax.set_xlabel(r"$\Delta\alpha^{+}$ per non-overlapping window of 4,000 hourly returns")
+    ax.set_xlabel(r"$\Delta\alpha^{+}$ per non-overlapping window of 4000 hourly returns")
     style(ax)
     ax.grid(axis="y", visible=False)
     fig.tight_layout()

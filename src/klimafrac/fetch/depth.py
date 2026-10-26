@@ -8,7 +8,7 @@ Sources, each stored verbatim because DefiLlama rewrites this history:
 The Toucan record is the only source here for the USD value of carbon locked
 in the Toucan pools, kept as a labelled comparison column. Tonnes are NOT
 taken from it; inventory in tonnes comes from on-chain totalSupply() in
-fetch/inventory.py, and the pool value in Figure 7 is reconstructed from pool
+fetch/inventory.py, and the pool value is reconstructed from pool
 reserves in fetch/reserves.py. The KlimaDAO record is stored for reference
 and nothing is derived from it.
 

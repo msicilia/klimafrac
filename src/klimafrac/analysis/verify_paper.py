@@ -34,7 +34,7 @@ each level before descending.
 
 Usage:
     uv run python -m klimafrac.analysis.verify_paper
-    uv run python -m klimafrac.analysis.verify_paper --section 4.2.5
+    uv run python -m klimafrac.analysis.verify_paper --section 4.3
     uv run python -m klimafrac.analysis.verify_paper --json
 """
 
@@ -87,7 +87,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
         ("data window closes", "market:tier_KLIMA_last_trade", "2026-07-25", "prefix"),
     ]),
 
-    ("3.1 Data -- construction, cleaning and sample", [
+    ("3.2 Reconstruction -- construction, cleaning and sample", [
         ("cleaning removes a sixth to a fifth, BCT", "market:cleaning_BCT_removed_share", (0.15, 0.20), "between"),
         ("cleaning removes a sixth to a fifth, NCT", "market:cleaning_NCT_removed_share", (0.15, 0.20), "between"),
         ("cleaning removes almost none of MCO2", "market:cleaning_MCO2_removed_share", 0.02, "lt"),
@@ -125,7 +125,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
          "size:size.carbon.MCO2.check_rank", (2_500, 3_500), "between"),
     ]),
 
-    ("3.2 Estimation and 3.3 Inference", [
+    ("3.3 Estimation and inference", [
         ("positive-q scale divisor, s_max = N/10", "calendar:design.positive_s_max_div",
          10, "int"),
         ("full-range daily divisor, s_max = N/4", "calendar:design.full_s_max_div_daily",
@@ -187,7 +187,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
          "calendar:daily.reconstructed.KLIMA.width_pos_shuffled_p95", 0.160, "abs"),
     ]),
 
-    ("4.1.1 Calendar-time estimates -- prose", [
+    ("4.1 Calendar-time estimates -- prose", [
         ("NCT is 1.48x BCT, aggregated, full range", "calendar:daily.vendor.NCT_over_BCT_width",
          1.48, "abs", 5e-3),
         ("positive side: NCT, MCO2 and KLIMA pass the shuffled null, aggregated",
@@ -247,7 +247,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
         ("windows: carbon", "scaling:scaling.hourly.carbon.q3.windows", 38, "int"),
     ]),
 
-    ("4.1 Hourly sampling -- the staleness pathology", [
+    ("4.1 Hourly sampling", [
         ("hourly full-range widths all exceed every daily one",
          "calendar:hourly.reconstructed.range.width.min", 1.19, "gt"),
         ("hourly h(-5) above one for every token", "calendar:hourly.reconstructed.range.h_neg5.min",
@@ -275,7 +275,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
          "calendar:hourly.reconstructed.range.width_pos.max", 0.466, "abs"),
     ]),
 
-    ("4.1.1 Positive-q estimates -- Table 3 (tab:hourly)", [
+    ("4.1 Positive-q estimates -- Table 5 (tab:hourly)", [
         ("BCT daily h(2)", "calendar:daily.reconstructed.BCT.h2_pos", 0.522, "abs"),
         ("BCT daily width+", "calendar:daily.reconstructed.BCT.width_pos", 0.345, "abs"),
         ("BCT hourly N", "calendar:hourly.reconstructed.BCT.n", 40_348, "int"),
@@ -317,6 +317,10 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
     ]),
 
     ("3.4 Staleness bias -- Table 2 (tab:bias)", [
+        ("caption: hourly carbon series sit at p = 0.23 at the least",
+         "calendar:hourly.reconstructed.range.no_trade_pct.min", 23, "abs", 0.5),
+        ("caption: hourly carbon series sit at p = 0.73 at the most",
+         "calendar:hourly.reconstructed.range.no_trade_pct.max", 73, "abs", 0.5),
         ("p = 0.0 full-range width", "staleness:bias_table_p000_width", 0.706, "abs"),
         ("p = 0.0 inflation", "staleness:bias_table_p000_inflation", 1.00, "abs", 5e-3),
         ("p = 0.0 width+", "staleness:bias_table_p000_width_pos", 0.174, "abs"),
@@ -440,7 +444,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
          "staleness:informativeness_N50000_lambda2_0.050_width_pos_rmse", 0.022, "abs"),
     ]),
 
-    ("4.1.3 Size of the customary inference", [
+    ("3.4 Size of the overlapping-window inference", [
         ("overlapping-window HAC rejection rate, 15.6%",
          "power:power.size.NCT_vs_BCT.hac.rejection", 0.16, "abs", 6e-3),
         ("HAC size, MCO2 design, 12%", "power:power.size.MCO2_vs_BCT.hac.rejection", 0.12, "abs", 5e-3),
@@ -454,16 +458,20 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
         ("step of the overlapping design", "power:power.step_overlap", 250, "int"),
     ]),
 
-    ("4.2.1 Within the quality ladder", [
+    ("4.2 Within the quality ladder", [
         ("zero returns are essentially absent", "tiers:tiers.BCT.zero_return_share",
          0.005, "lt"),
         ("NCT - BCT gap", "tiers:tiers.main.NCT_vs_BCT.gap", 0.024, "abs"),
         ("NCT - BCT p", "tiers:tiers.main.NCT_vs_BCT.p", 0.64, "p", 5e-3),
         ("NCT windows", "tiers:tiers.main.NCT_vs_BCT.n_other", 9, "int"),
+        ("NCT - BCT matched p", "tiers:tiers.NCT_vs_BCT.matched.p", 1.0, "p", 5e-3),
         ("BCT windows", "tiers:tiers.main.NCT_vs_BCT.n_base", 99, "int"),
         ("MCO2 - BCT gap", "tiers:tiers.main.MCO2_vs_BCT.gap", -0.163, "abs"),
         ("MCO2 - BCT p below 0.001", "tiers:tiers.main.MCO2_vs_BCT.p", 0.001, "lt"),
         ("MCO2 windows", "tiers:tiers.main.MCO2_vs_BCT.n_other", 14, "int"),
+        ("MCO2 - BCT gap by execution price", "execution_q3/tiers:tiers.main.MCO2_vs_BCT.gap", 0.018, "abs"),
+        ("MCO2 - BCT p by execution price", "execution_q3/tiers:tiers.main.MCO2_vs_BCT.p", 0.72, "p", 5e-3),
+        ("NCT - BCT gap by execution price, zero", "execution_q3/tiers:tiers.main.NCT_vs_BCT.gap", 0.005, "lt"),
         ("BCT window span, days", "tiers:tiers.BCT.span_days_median", 1.3, "abs", 5e-2),
         ("NCT window span, days", "tiers:tiers.NCT.span_days_median", 111.4, "abs", 0.5),
         ("most BCT windows start in 2021", "tiers:tiers.BCT.windows_start_2021", 49.5, "gt"),
@@ -495,6 +503,13 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
          0.002, "p"),
         ("full data window, MCO2 windows",
          "tiers:tiers.robust.full_window.MCO2_vs_BCT.n_other", 15, "int"),
+        *[(f"to {end}, {c} {what}", f"tiers:tiers.robust.to_{end.replace('-', '_')}.{c}_vs_BCT.{field}",
+           value, kind)
+          for end in ("2026-01-01", "2026-04-01")
+          for c, rows in (("NCT", ((0.024, "gap", "abs"), (0.642, "p", "p"), (9, "n_other", "int"))),
+                          ("MCO2", ((-0.163, "gap", "abs"), (0.001, "p", "lt"), (14, "n_other", "int"))))
+          for value, field, kind in rows
+          for what in [{"gap": "gap", "p": "p", "n_other": "windows"}[field]]],
         ("isolated trades, NCT gap", "tiers:tiers.robust.isolated.NCT_vs_BCT.gap",
          -0.114, "abs"),
         ("isolated trades, NCT p", "tiers:tiers.robust.isolated.NCT_vs_BCT.p", 0.133, "p"),
@@ -540,7 +555,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
          [87, 5], "set"),
     ]),
 
-    ("4.2.1 Power of the ladder comparison", [
+    ("4.2 Power of the ladder comparison", [
         ("size of the design, NCT", "power:power.curve.NCT_vs_BCT.size", (0.02, 0.08), "between"),
         ("size of the design, MCO2", "power:power.curve.MCO2_vs_BCT.size", (0.02, 0.08), "between"),
         ("80% power beyond about 0.13, NCT design",
@@ -550,7 +565,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
         ("replications per rung", "power:power.curve.NCT_vs_BCT.reps", 500, "int"),
     ]),
 
-    ("4.3 Between asset classes -- Table 8 (tab:contrasts)", [
+    ("4.3 Between asset classes -- Table 6 (tab:contrasts)", [
         ("estimate, all: gap", "asset_class:asset_class.contrast.A.all.gaps_filled.gap", 0.196, "abs"),
         ("estimate, all: p", "asset_class:asset_class.contrast.A.all.gaps_filled.p", 0.001, "lt"),
         ("estimate, p <= 0.30: gap", "asset_class:asset_class.contrast.A.no_trade_le_0.30.gaps_filled.gap", 0.196, "abs"),
@@ -590,7 +605,10 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
         ("reference, all: token p", "asset_class:asset_class.token_test.C.all.p_two_sided", 0.133, "abs", 0.005),
         ("reference, p <= 0.30: token p", "asset_class:asset_class.token_test.C.no_trade_le_0.30.p_two_sided", 0.3, "abs", 0.005),
         ("reference, p <= 0.05: token p", "asset_class:asset_class.token_test.C.no_trade_le_0.05.p_two_sided", 0.33, "abs", 0.005),
-        ("estimate, all: floor of the token test", "asset_class:asset_class.token_test.A.all.min_attainable_p_upper", 0.029, "abs"),
+        ("estimate, all: floor of the token test", "asset_class:asset_class.token_test.A.all.min_attainable_p_two_sided", 0.029, "abs"),
+        ("estimate, all: assignments", "asset_class:asset_class.token_test.A.all.assignments", 35, "int"),
+        ("estimate, p <= 0.30: assignments", "asset_class:asset_class.token_test.A.no_trade_le_0.30.assignments", 20, "int"),
+        ("estimate, p <= 0.05: assignments", "asset_class:asset_class.token_test.A.no_trade_le_0.05.assignments", 10, "int"),
         ("estimate, p <= 0.30: floor of the token test", "asset_class:asset_class.token_test.A.no_trade_le_0.30.min_attainable_p_two_sided", 0.1, "abs", 0.005),
         ("estimate, p <= 0.05: floor of the token test", "asset_class:asset_class.token_test.A.no_trade_le_0.05.min_attainable_p_two_sided", 0.1, "abs", 0.005),
     ]),
@@ -632,7 +650,7 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
         ("WBTC_Q staleness about a quarter at most", "asset_class:asset_class.token.WBTC_Q.no_trade_median", 0.26, "lt"),
     ]),
 
-    ("4.3 The matched benchmark -- Table 9 (tab:benchmark_tests)", [
+    ("4.3 The matched benchmark -- Table 7 (tab:benchmark_tests)", [
         ("asset: gap", "thin_benchmark:thin_benchmark.asset.gap", 0.089, "abs"),
         ("asset: reassignment p", "thin_benchmark:thin_benchmark.asset.token_p", 0.123, "abs"),
         ("asset: rank p", "thin_benchmark:thin_benchmark.asset.rank_p_two_sided", 0.207, "abs"),
@@ -667,7 +685,9 @@ CLAIMS: list[tuple[str, list[tuple]]] = [
         ("active tokens", "thin_benchmark:thin_benchmark.active.tokens", 6, "int"),
         ("35 of 36 thin medians above the deep median", "thin_benchmark:thin_benchmark.thinness.tokens_of_second_above_first_median", 35, "int"),
         ("asset: positive in all 60 variants", "thin_robustness:thin_robustness.asset.gap_positive", 60, "int"),
-        ("asset: rank p below 0.05 in three variants", "thin_robustness:thin_robustness.asset.rank_p_below_alpha", 3, "int"),
+        ("asset: significant in 14 variants", "thin_robustness:thin_robustness.asset.significant_variants", 14, "int"),
+        ("asset: thirteen of them dollar floors of 2 and above",
+         "thin_robustness:thin_robustness.asset.significant_at_floor_ge_2", 13, "int"),
         ("dose: idle share and width across 45 conventional tokens", "thin_benchmark:thin_benchmark.dose.conventional.rho", 0.46, "abs", 0.005),
         ("floor 3: thin vs deep gap", "thin_robustness:thin_robustness.floor.min_usd=3.thinness.gap", 0.071, "abs"),
         ("floor 3: thin vs deep rank p", "thin_robustness:thin_robustness.floor.min_usd=3.thinness.rank_p", 0.04, "abs", 0.005),
@@ -780,8 +800,15 @@ _FILES: dict[str, dict | None] = {}
 
 
 def load(module: str) -> dict | None:
+    """A module is read from the live results folder; "<config>/<module>"
+    reads it from another configuration's folder, data/results_<config>/,
+    for the few claims that compare the paper's setting with another."""
     if module not in _FILES:
-        path = RESULTS_DIR / f"{module}.json"
+        if "/" in module:
+            config, name = module.split("/", 1)
+            path = RESULTS_DIR.parent / f"results_{config}" / f"{name}.json"
+        else:
+            path = RESULTS_DIR / f"{module}.json"
         _FILES[module] = json.loads(path.read_text()) if path.exists() else None
     return _FILES[module]
 

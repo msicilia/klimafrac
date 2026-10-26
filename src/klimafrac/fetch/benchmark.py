@@ -2,8 +2,8 @@
 Conventional crypto benchmark: BTC and ETH prices from DefiLlama.
 
 A globally traded asset has no single pool to reconstruct, so the vendor's
-blended price is the instrument here. The series are the benchmark side of
-the asset-class comparison and of Figure 5.
+blended price is the instrument here. The series are the aggregated side of
+the construction control in the asset-class comparison.
 
 Source: https://coins.llama.fi/chart/coingecko:{bitcoin,ethereum}, stored
 verbatim by fetch/defillama.py, which documents the bar convention.

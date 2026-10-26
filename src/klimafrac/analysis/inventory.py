@@ -1,7 +1,6 @@
 """
 Pool inventory, pool value and the October 2025 BCT redemption, read from
-the chain (paper Section 4.2.2 "Pool inventory and redemption", Figure
-fig7_depth; the sentences on the event in the Introduction and Conclusion).
+the chain. Not used in the paper.
 
 Nothing is fetched or typed in here. The module reads what the fetchers wrote:
   data/inventory.csv, data/inventory_daily.csv, data/inventory_summary.json
@@ -20,8 +19,8 @@ Inventory. A value dated D in inventory_daily.csv is the supply immediately
 before 00:00 UTC on D. Here tonnes on day D means the supply at the END of D,
 i.e. the row dated D + 1, so that a day's tonnage and that day's trades
 describe the same interval. The exact all-time peak is the block-level peak
-from the event path; the monthly sample, which the paper previously quoted,
-is reported next to it because it lands on the first of the following month.
+from the event path; the monthly sample is reported next to it because it
+lands on the first of the following month.
 
 Pool value. value(D) = tonnes at the end of D x the median price of the
 pool's cleaned swaps executed on D (USDC per token). Days without a cleaned

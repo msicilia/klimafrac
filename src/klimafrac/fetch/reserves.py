@@ -1,8 +1,8 @@
 """
 Pool reserves at every daily boundary, and the pool value they imply.
 
-Figure 7's value panel is read from the chain, so the value has to come from
-the pool's own balance sheet rather than from an aggregator. For each pool in
+The pool value is read from the chain, so it has to come from the pool's
+own balance sheet rather than from an aggregator. For each pool in
 fetch/pools.py this module calls getReserves() at the last block before 00:00
 UTC on every day of the window and records both reserves exactly.
 

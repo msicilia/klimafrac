@@ -1,6 +1,6 @@
 [project]
 name = "klimafrac"
-version = "1.0.0"
+version = "1.2.0"
 description = "Code for 'Comparative Complexity of Green and Conventional Crypto Assets: Multifractal Evidence from Tokenized Carbon Markets'"
 readme = "README.md"
 authors = [

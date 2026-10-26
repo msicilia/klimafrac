@@ -13,8 +13,7 @@ bridged BCT contract on Base from the same 2021-10-08 start as the Polygon
 series, so the bars the vendor returns for instants before Base mainnet
 existed (block 0, 2023-06-15) are in the stored data rather than asserted.
 Its `chain_genesis_instant` in data/vendor_manifest.json is read from the
-chain, and the paper's claim in Section 3.1 is checked against the CSV by
-klimafrac.analysis.verify_paper.
+chain.
 
 Pinned window: from each series' start -- for the Polygon tokens the first
 00:00 UTC at or after the token's Polygon deployment block, but not before

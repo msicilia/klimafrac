@@ -3,7 +3,7 @@ DefiLlama's hourly USD prices for BCT, NCT, MCO2 and KLIMA on Polygon.
 
 The hourly counterpart of fetch/daily_prices.py, and like it an object of
 study rather than an input: it supplies the aggregator's apparent staleness
-(Figure 1) and the aggregated rows of the hourly calendar-time table.
+and the aggregated rows of the hourly calendar-time table.
 
 Source: https://coins.llama.fi/chart/polygon:<token address>, stored verbatim
 by fetch/defillama.py, which documents the bar convention.

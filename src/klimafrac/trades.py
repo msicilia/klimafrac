@@ -89,7 +89,7 @@ def clean(df: pd.DataFrame, key: str, min_usd: float = MIN_USD, min_base: float 
     # A swap moves the two tokens in opposite directions. The Swap event of a
     # pair that already held surplus tokens can book the pool as receiving
     # both, and the ratio of the two legs is then not a price. Fifteen such
-    # swaps exist, in four conventional pools (audit of 2026-10-10).
+    # swaps exist, in four conventional pools.
     keep &= np.sign(df.base_amt) != np.sign(df.quote_amt)
     d = df[keep].reset_index(drop=True)
     if max_deviation is None:

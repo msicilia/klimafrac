@@ -1,6 +1,6 @@
 """
 What pricing a swap by execution rather than from the pool's reserves does to
-the hourly positive-side width (paper Section 4.1).
+the hourly positive-side width: the paper's paragraph on the price itself.
 
 For every pool whose swap file carries both prices, the hourly grid and the
 non-overlapping windows of trades.py are built twice, once from the price

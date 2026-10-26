@@ -1,8 +1,9 @@
 """
 Calendar-time estimates on the reconstructed pools and on the aggregator's
-series, and how stale the aggregator's series is against the trades (paper
-Sections 3.1 and 4.1.1: Tables tab:daily and tab:hourly, Figures
-fig1_staleness and fig2_hq; the hourly N and observed widths cited in 4.1.2).
+series, and how stale the aggregator's series is against the trades: the
+paper's Tables tab:daily and tab:hourly and the aggregator staleness cited
+in its data section. Figures fig1_staleness and fig2_hq are drawn but not in
+the paper.
 
 Series. For each token the pool's cleaned trades in the estimation sample
 (trades.trades) are put on a daily and an hourly grid (trades.calendar): from
@@ -30,8 +31,7 @@ Estimators (mfdfa.py, s_min = 10):
                moments (the corrected estimator). The same fit with
                exclude_flat=False is reported in *_ro columns: it keeps the
                ~1e-30 floating-point residual of flat segments, so its
-               negative branch depends on machine precision, and it is what
-               earlier versions of this analysis reported.
+               negative branch depends on machine precision.
   positive q   q in [0.5, 5], s_max = N/10 at both frequencies.
 
 Surrogates. Every width -- full range and positive side, daily and hourly,
@@ -63,7 +63,7 @@ Outputs (suffix _quick with --quick):
                                              columns of tab:hourly
   data/results/calendar_hourly.csv           Table tab:hourly, the hourly
                                              full-range widths
-  data/results/calendar_vendor_staleness.csv Figure 1 and its text
+  data/results/calendar_vendor_staleness.csv aggregator staleness
   data/results/calendar.json                 cited numbers
   figures/fig1_staleness.png, figures/fig2_hq.png
 
@@ -301,13 +301,8 @@ def fig_staleness(st: pd.DataFrame, path: str) -> None:
 
 
 def fig_hq(tokens, path: str) -> None:
-    """h(q) on hourly data, corrected estimator only.
-
-    The uncorrected variant (exclude_flat=False, the *_ro columns) was dropped
-    from the manuscript in September 2026 as a detail about floating point
-    rather than about these markets. It is still computed and stored, so the
-    dashed series can be restored here if a reviewer asks for it.
-    """
+    """h(q) on hourly data, corrected estimator only; the uncorrected variant
+    (exclude_flat=False, the *_ro columns) is computed and stored, not drawn."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
     for token in tokens:
         x = series(token, "hourly", "reconstructed").to_numpy()

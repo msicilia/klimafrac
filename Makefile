@@ -9,7 +9,7 @@
 # The paper's configuration is the default: the pool price and q up to 3
 # (src/klimafrac/paths.py). Any other configuration is selected with the
 # environment, e.g. `KLIMAFRAC_PRICE=execution KLIMAFRAC_QMAX=5 make analysis`
-# reproduces the submitted version into data/results_execution_q5/.
+# writes to data/results_execution_q5/ and figures_execution_q5/.
 #
 # Every fetch step writes completed chunks atomically and resumes where it
 # stopped, so re-running `make fetch` after a failure is safe.
@@ -87,7 +87,7 @@ analysis: validate
 verify:
 	$(PY).analysis.verify_paper
 
-# Analyses that no longer feed the paper (venues across chains; pool inventory
+# Analyses not used in the paper (venues across chains; pool inventory
 # and the October 2025 burn). They need `make chain-extra` first.
 chain-extra:
 	$(PY).fetch.inventory

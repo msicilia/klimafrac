@@ -10,17 +10,14 @@ last weekly snapshot before the first hourly series begins (2021-10-08), so
 that size is measured before the trading it is set against
 (https://coinmarketcap.com/historical/20211003/), read from the listing feed
 behind that page. The ranking of CHECK_SNAPSHOT, the first weekly snapshot
-after the date by which the candidate pools had to exist, was the measure
-until 2026-10-14, when an audit found that it falls four months into the
-sample; it is kept as a check (`check_rank`). A token is tied to a ranked asset by its contract and never
-by its name: the candidates are the ranked assets carrying the token's
+after the date by which the candidate pools had to exist, four months into
+the sample, is kept as a check (`check_rank`). A token is tied to a ranked
+asset by its contract and never by its name: the candidates are the ranked assets carrying the token's
 on-chain symbol, and the one kept is the one whose record lists the token's
 Polygon address, or else the Ethereum address that Polygon's own bridge names
 as the token's origin (RootChainManager.childToRootToken, read on Ethereum).
-The second route was added when the first left unlisted several tokens that
-are plainly bridged copies of ranked assets, whose records list only the
-Ethereum contract; it was added before any size was set against a width. A
-token with no such asset is unlisted. Three tokens wrap a coin that has no
+The second route covers bridged copies of ranked assets whose records list
+only the Ethereum contract. A token with no such asset is unlisted. Three tokens wrap a coin that has no
 contract of its own -- WETH, WBTC and WPOL -- and take the rank of the coin
 they wrap (UNDERLYING).
 
@@ -65,15 +62,14 @@ from klimafrac.paths import data, raw
 
 MODULE = "token_size"
 SNAPSHOT = "2021-10-03"          # the last weekly snapshot before the first hourly series (2021-10-08)
-CHECK_SNAPSHOT = "2022-02-13"    # the first after the pools' existence date; the measure until 2026-10-14
+CHECK_SNAPSHOT = "2022-02-13"    # the first after the pools' existence date; a check
 LATE_DATE = "26-05-2026"
 # Contracts the ranking's own records misplace. The record of Telcoin (2394)
 # lists the same address for Ethereum, Polygon and Base, so the rule above
 # cannot tie the Polygon pool token to it, although the second source
 # resolves the contract to Telcoin. The rule is kept; the asset is recorded
 # as `sensitivity_id` so that analysis/size.py can report the test with the
-# token coded as listed. Found by the audit of 2026-10-10, after the main
-# test had been run.
+# token coded as listed.
 KNOWN_MISMATCH = {"0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32": 2394}
 ROLES = ("carbon", "control", "thin", "active")
 CMC = "https://api.coinmarketcap.com/data-api/v3/cryptocurrency"

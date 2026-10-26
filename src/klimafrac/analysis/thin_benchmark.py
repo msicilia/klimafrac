@@ -26,7 +26,7 @@ Plan, fixed before any thin pool was analysed.
   Contrasts.
     asset     carbon against thin: the asset differs, thinness is matched
     thinness  thin against deep: thinness differs, both conventional
-    both      carbon against deep: the comparison the paper already reports
+    both      carbon against deep: the comparison of analysis/asset_class.py
     activity  thin against active: tokens of the same kind, traded rarely or
               often
     busy      thin against deep and active together

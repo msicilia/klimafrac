@@ -38,7 +38,7 @@ src/klimafrac/
     reserves.py, depth.py  reserves and depth over time
     defillama.py      vendor snapshots, stored verbatim with a manifest
     daily_prices.py, hourly_prices.py, benchmark.py  vendor price series
-    inventory.py, treasury.py, burn.py  pool inventory (no longer in the paper)
+    inventory.py, treasury.py, burn.py  pool inventory (not used in the paper)
 
   analysis/
     market.py       Table 1, volumes, cleaning shares, threshold checks
@@ -58,7 +58,7 @@ src/klimafrac/
     scaling.py      log-log fit diagnostics per window and q
     size.py         width against asset size and pool idleness
     verify_paper.py compares the manuscript with data/results/
-    venues.py, inventory.py  no longer in the paper
+    venues.py, inventory.py  not used in the paper
 ```
 
 ## Setup
@@ -72,6 +72,9 @@ The key is needed only to fetch. Once `data/` is populated the analysis runs
 offline.
 
 ## Reproducing
+
+To reproduce the paper from nothing: clone, `uv sync`, put a free Alchemy key
+in `.env`, then run the four targets below or `make all`.
 
 ```bash
 make fetch      # on-chain and vendor data: hours, resumable, needs the key
@@ -94,15 +97,22 @@ pool price and q up to 3, are the paper's and write to `data/results/` and
 `figures/`. Any other combination writes to folders named by both switches:
 
 ```bash
-KLIMAFRAC_PRICE=execution KLIMAFRAC_QMAX=5 make analysis   # the submitted version
+KLIMAFRAC_PRICE=execution KLIMAFRAC_QMAX=5 make analysis   # execution price, q up to 5
 ```
 
 ## Data
 
-No data is committed. `data/swaps_manifest.json` records, for every pool, the
-pinned block range, the counts at each stage and the SHA-256 of the swap file,
-so a refetch can be compared with ours file by file. `data/swaps_audit.json`
-records the result of the independent audit.
+No data is committed. Everything the paper uses is public and `make fetch`
+retrieves it: the Swap, Sync, Mint and Burn logs of every pool from the
+Polygon and Base chains, through a free Alchemy key; the aggregated price
+series from the DefiLlama API; and the market-capitalisation ranking from
+CoinMarketCap's historical snapshots. The on-chain fetch is pinned to fixed
+block ranges, so a run today retrieves exactly the swaps the paper analysed,
+and it writes `data/swaps_manifest.json` with the block range, the counts at
+each stage and the SHA-256 of every swap file; `make audit` writes
+`data/swaps_audit.json` with the result of the independent check against the
+chain. The aggregator series are the one input the vendor can revise, so a
+refetch is stored as a dated snapshot rather than overwritten.
 
 The window ends at the last block before 2026-07-26 00:00 UTC: Polygon
 90,879,334 and Base 49,117,326. Every estimate uses the estimation sample,
@@ -148,5 +158,5 @@ manufacture apparent multifractality in monofractal series.
 `analysis/calendar.py` reports both for every width.
 
 **Report the size and power of the design you use.** `analysis/power.py`
-simulates both the design used here and the overlapping-window regression
-customary in this literature, at the group sizes these data have.
+simulates both the design used here and a regression on overlapping windows
+with a HAC correction, at the group sizes these data have.

@@ -1,8 +1,8 @@
 """
 The October 2025 BCT burn, derived from the chain.
 
-Every number the paper gives for the event (Section 4.2.2) is recomputed
-here from Polygon state; nothing is typed in.
+Every number is recomputed from Polygon state; nothing is typed in. Not
+used in the paper.
 
   1. Month.       S(a) and S(b), BCT totalSupply() at a and b, the last blocks
                   before 00:00 UTC on 1 October and 1 November 2025. The

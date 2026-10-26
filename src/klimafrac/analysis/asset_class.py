@@ -1,9 +1,9 @@
 """
 Carbon tokens against conventional crypto: the asset-class gap in the
 positive-q spectrum, what data construction contributes to it, how much the
-design can resolve, and the price paths behind it (paper abstract and
-Introduction; Section 4.2.5 "Between asset classes" with Table
-tab:contrasts and Figures fig5_prices and fig6_comparative; Conclusions).
+design can resolve, and the price paths behind it: the paper's Table
+tab:contrasts and the first part of its section between asset classes.
+Figures fig5_prices and fig6_comparative are drawn but not in the paper.
 
 Series. Nine hourly series in three groups:
   carbon        BCT, NCT, MCO2, KLIMA, reconstructed from their Polygon

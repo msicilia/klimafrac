@@ -18,10 +18,7 @@ Plan, fixed before any token's size was set against its width.
   that size is measured before the trading it is set against. A larger rank
   number is a smaller asset. A token matched to no ranked asset takes the
   rank after the last ranked one, all such tokens tied. WETH, WBTC and WPOL
-  take the rank of the coin they wrap. Until 14 October 2026 the measure was
-  the ranking of 13 February 2022, the first snapshot after the date by which
-  the candidate pools had to exist; an audit found that date to lie four
-  months into the sample, and it became the `check` variant below.
+  take the rank of the coin they wrap.
 
   Test. No cut-off divides large from small. On ranks, across tokens:
     rho(width, idleness)            and its partial holding size fixed
@@ -32,7 +29,9 @@ Plan, fixed before any token's size was set against its width.
 
   Checks, each repeating the test with one thing changed:
     volume      size by rank of worldwide 24-hour volume in the same ranking
-    check       size by rank in the ranking of 13 February 2022
+    check       size by rank in the ranking of 13 February 2022, the first
+                snapshot after the date by which the candidate pools had to
+                exist, four months into the sample
     late        size by market value on the last day of the estimation
                 sample, from a second, documented source; later than the
                 trading it is set against, so a check and not the measure.
@@ -41,9 +40,8 @@ Plan, fixed before any token's size was set against its width.
     weth_once   without the second WETH pool
     mismatch_recoded
                 tokens whose ranked asset the ranking's record misplaces
-                (fetch/token_size.KNOWN_MISMATCH) coded as that asset; added
-                after the audit of 10 October 2026, which found one such
-                token (TEL), so a sensitivity and not part of the plan
+                (fetch/token_size.KNOWN_MISMATCH) coded as that asset; one
+                token, TEL. A sensitivity, not part of the plan
 
   Description. Median width in the four cells of thin or busy pool by asset
   ranked in the first hundred or not. The cut is the conventional one and

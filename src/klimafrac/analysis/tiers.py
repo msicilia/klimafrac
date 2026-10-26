@@ -1,7 +1,7 @@
 """
 Transaction-time comparison of the carbon pool tiers: NCT against BCT and
-MCO2 against BCT (paper Section 4.2.1, "Within the quality ladder", with its
-Robustness paragraph and Table tab:robust).
+MCO2 against BCT: the paper's section within the quality ladder and its
+Table tab:robust.
 
 Main comparison. Each token's cleaned trades in the estimation sample
 (trades.trades) give trade-to-trade log returns (trades.returns, first trade
@@ -38,6 +38,9 @@ autocorrelation correction; HC3 guards against the unequal group sizes.
 Robustness (Table tab:robust). Each specification reruns both comparisons:
   estimation sample   the specification above
   full data window    cleaned trades without the SAMPLE_END restriction
+  to 2026-01-01,      the sample cut at the end of the last complete calendar
+  to 2026-04-01       year and quarter before SAMPLE_END, the mechanical
+                      endpoints of analysis/thin_robustness.py
   isolated trades     only swaps that are alone in their block, with returns
                       recomputed on the price path of the isolated trades.
                       Block membership is read from every swap of the pool
@@ -85,6 +88,7 @@ from klimafrac.results import numbers, table
 TOKENS = {"BCT": "polygon_BCT", "NCT": "polygon_NCT", "MCO2": "polygon_MCO2"}
 BASE = "BCT"
 OTHERS = ("NCT", "MCO2")
+ENDPOINTS = ("2026-01-01", "2026-04-01")   # as in analysis/thin_robustness.py
 
 GRID_MIN_USD = (0.0, 0.10, 1.0, 10.0)
 GRID_MIN_BASE = (0.0, 1e-4)
@@ -282,6 +286,11 @@ def main():
 
     _, rows = run("full data window", full)
     record(rows, out, "tiers.robust.full_window")
+
+    for end in ENDPOINTS:
+        frames = {t: trades.sample(full[t], end=pd.Timestamp(end, tz="UTC")) for t in TOKENS}
+        _, rows = run(f"to {end}", frames)
+        record(rows, out, f"tiers.robust.to_{end.replace('-', '_')}")
 
     iso = {t: isolated(est[t], raw[t]) for t in TOKENS}
     for t in TOKENS:

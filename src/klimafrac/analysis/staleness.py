@@ -1,17 +1,16 @@
 """
 Calibration of the staleness bias: what carrying the last price forward does
 to the estimated singularity spectrum when the generating process is known
-and held fixed (paper Section 4.1.2, Table tab:bias, Figure
-fig3_staleness_bias; the threshold it supports is used in Sections 3.2.2 and
-5.2).
+and held fixed: the paper's Tables tab:bias and tab:informativeness and the
+staleness threshold of its measurement practices. Figure fig3_staleness_bias
+is drawn but not in the paper.
 
 Process. Increments of a multifractal random walk (synthetic.mrw) with
 intermittency lambda2 and integral scale synthetic.INTEGRAL_SCALE, fixed
-across series lengths so that every N is a draw from the same process. The
-grid lambda2 in {0.05, 0.10, 0.15}, base 0.10, is the process the earlier
-calibration meant by nominal {0.10, 0.20, 0.30}: that generator realised half
-the stated intermittency. Its true spectrum gives h(q) = 1/2 + lambda2 -
-lambda2 q / 2, so the positive-q width has a known target.
+across series lengths so that every N is a draw from the same process, on
+the grid lambda2 in {0.05, 0.10, 0.15} with base 0.10. Its true spectrum
+gives h(q) = 1/2 + lambda2 - lambda2 q / 2, so the positive-q width has a
+known target.
 
 Staleness. Each interval contains a trade or not; a traded interval returns
 the whole price change accumulated since the previous trade and an untraded
@@ -122,11 +121,9 @@ BASE_LAMBDA = 0.10
 KNEE_TOL = 1.10
 KNEE_TOL_LOOSE = 1.50
 BOOT_DRAWS = 1000
-# Hourly no-trade fractions of BCT and MCO2 (Section 3.2.2), shaded in the
-# figure as the range the empirical series occupy.
+# Hourly no-trade fractions of BCT and MCO2, shaded in the figure as the
+# range the empirical series occupy.
 OBSERVED_NOTRADE = (0.478, 0.736)
-# Nominal lambda2 of the earlier calibration and the value it realised.
-OLD_NOMINAL_LAMBDA = {0.10: 0.05, 0.20: 0.10, 0.30: 0.15}
 
 
 def label(run_length: int) -> str:
@@ -399,7 +396,6 @@ def cited_numbers(reps: int, ps, curve_df, knee_df, info_df, bias_df, runtime) -
         "design_markov_mean_quiet_runs": list(RUN_LENGTHS),
         "design_knee_tolerance": KNEE_TOL, "design_knee_tolerance_loose": KNEE_TOL_LOOSE,
         "design_bootstrap_draws": BOOT_DRAWS,
-        "design_old_nominal_to_true_lambda2": {f"{k:.2f}": v for k, v in OLD_NOMINAL_LAMBDA.items()},
         "design_series_simulated": int(runtime["series"]),
         "runtime_seconds": runtime["seconds"],
     }

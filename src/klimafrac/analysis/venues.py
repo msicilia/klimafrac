@@ -1,8 +1,7 @@
 """
 One asset on two venues: what venue microstructure does to the positive-q
-spectrum, and whether a comparison of this kind can detect it (paper Section
-2.3 on round-trip cost, and Section 4.2.3 "Between venues" with Tables
-tab:venueyear and tab:venuepower).
+spectrum, and whether a comparison of this kind can detect it. Not used in
+the paper.
 
 Every estimate uses the estimation sample (trades.trades: cleaned, before
 SAMPLE_END) unless a row is labelled otherwise. Two designs hold the asset

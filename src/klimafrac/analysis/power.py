@@ -1,8 +1,7 @@
 """
-Size of the customary rolling-window inference and power of the design the
-paper uses, both simulated on multifractal random walks (paper Section 4.1.3
-"Size of the customary inference", the Power paragraph of Section 4.2.1, and
-the 40% figure repeated in Sections 3.3 and 5.2).
+Size of the overlapping-window inference and power of the design the paper
+uses, both simulated on multifractal random walks: the paper's calibration
+section and the Power paragraph of its quality-ladder section.
 
 Both simulations reproduce the empirical comparison NCT vs BCT and MCO2 vs
 BCT, one design at a time and never pooled. Each simulated group is one MRW
@@ -35,7 +34,7 @@ processes are identical and the gap is zero by construction. Its standard
 error is a bootstrap over the independent series the populations are built
 from.
 
-(i) Size of the customary procedure, per design. Both groups share the base
+(i) Size of the overlapping-window procedure, per design. Both groups share the base
 lambda2, so equality holds. Windows of 4,000 advance by 250; window widths
 of the two groups are stacked and regressed on a constant and a group dummy
 by OLS, with Newey-West (Bartlett) standard errors; equality is rejected when

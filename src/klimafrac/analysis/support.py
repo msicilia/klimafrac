@@ -1,6 +1,7 @@
 """
-Common support in staleness across the carbon tiers, in calendar time (paper
-Section 4.1, the paragraph on rolling windows, and Figure fig4_support).
+Common support in staleness across the carbon tiers, in calendar time: the
+paper's paragraph on why the ladder is compared in transaction time. Figure
+fig4_support is drawn but not in the paper.
 
 For BCT, NCT and MCO2 the cleaned trades of the estimation sample are put on
 an hourly grid (trades.calendar): each hour carries the last traded price
