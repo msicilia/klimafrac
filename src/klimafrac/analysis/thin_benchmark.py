@@ -1,64 +1,27 @@
 """
-Carbon tokens against conventional tokens that trade as thinly as they do.
+Carbon tokens against conventional tokens that trade as thinly as they do,
+and the other contrasts between the benchmark groups: the paper's Table
+tab:benchmark_tests.
 
-The asset-class comparison (analysis/asset_class.py) sets the carbon tokens
-against WETH and WBTC, the most active pools on the same exchanges, so a wider
-carbon spectrum cannot be told apart from a wider thin-market spectrum. This
-module adds the group that separates the two: the conventional tokens that
-fetch/thin_candidates.py selects for being as thin as the carbon pools, by a
-rule that reads only depth and idleness from the chain.
+Groups, every series rebuilt by the same path (trades.trades, the hourly
+grid of trades.calendar, non-overlapping windows of trades.WINDOW returns,
+the positive-side width): carbon (BCT, NCT, MCO2, KLIMA); thin and active,
+the pools with those roles in fetch/pools.py, selected by
+fetch/thin_candidates.py; deep (WETH on Sushiswap, WETH and WBTC on
+Quickswap). The unit is the token, whose value is the median width of its
+windows.
 
-Three groups, every series rebuilt by the same path (trades.trades, the
-hourly grid of trades.calendar, non-overlapping windows of trades.WINDOW
-hourly returns, the positive-side width of mfdfa.positive_spectrum):
+Contrasts: asset (carbon vs thin), thinness (thin vs deep), both (carbon vs
+deep), activity (thin vs active), busy (thin vs deep and active), majors
+(deep vs active). Tests for each: the exact token-reassignment test
+(asset_class.token_test; random reassignments above EXACT_LIMIT), the exact
+Mann-Whitney test on token values with the Hodges-Lehmann shift and its
+confidence interval, and the window-level permutation test as description.
+Also the Spearman correlation between a conventional token's no-trade share
+and its value.
 
-  carbon   BCT, NCT, MCO2, KLIMA
-  thin     the pools registered with role "thin" in fetch/pools.py
-  deep     WETH on Sushiswap, WETH and WBTC on Quickswap
-  active   the pools registered with role "active": conventional tokens that
-           trade more often than any carbon pool, chosen by the mirror image
-           of the rule that chose the thin ones
-
-Plan, fixed before any thin pool was analysed.
-
-  Unit. The token. A token's value is the median width of its windows.
-
-  Contrasts.
-    asset     carbon against thin: the asset differs, thinness is matched
-    thinness  thin against deep: thinness differs, both conventional
-    both      carbon against deep: the comparison of analysis/asset_class.py
-    activity  thin against active: tokens of the same kind, traded rarely or
-              often
-    busy      thin against deep and active together
-    majors    deep against active: whether WETH and WBTC differ from other
-              tokens that trade often
-  The active group and the last three contrasts were added after the first
-  three had been run, and fixed before any active pool was analysed.
-
-  Tests, for each contrast.
-    token test    asset_class.token_test: whole tokens, windows attached, are
-                  reassigned between the two groups in every possible way and
-                  the difference of group median window widths is recomputed;
-                  exact, two-sided on the absolute difference. Where the
-                  reassignments exceed EXACT_LIMIT they are drawn at random
-                  instead, and p = (hits + 1) / (draws + 1).
-    rank test     the Mann-Whitney statistic on the token values, with its
-                  exact null distribution, the Hodges-Lehmann shift (the
-                  median of all pairwise differences between tokens of the two
-                  groups) and the exact confidence interval that inverts the
-                  test, at the attainable level nearest above 95%.
-    windows       stats.permutation_test on the pooled windows, reported as
-                  description: windows of one token are not independent.
-
-  Dose. Across the conventional tokens, thin, deep and active together, the Spearman
-  correlation between a token's share of hours with no trade and its value,
-  with a permutation p-value. If thinness drives the width, it is positive.
-
-Outputs (via klimafrac.results):
-  data/results/thin_benchmark_windows.csv   one row per window of every token
-  data/results/thin_benchmark_tokens.csv    one row per token
-  data/results/thin_benchmark_tests.csv     one row per contrast
-  data/results/thin_benchmark.json          the numbers for the manuscript
+Outputs (data/results/): thin_benchmark_windows.csv,
+thin_benchmark_tokens.csv, thin_benchmark_tests.csv, thin_benchmark.json.
 
 Usage:
     uv run python -m klimafrac.analysis.thin_benchmark

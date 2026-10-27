@@ -1,43 +1,18 @@
 """
-The KlimaDAO treasury, and who holds the carbon pool tokens.
+The KlimaDAO treasury's reserve registry and holdings, month by month. Not
+used in the paper.
 
-The Olympus-fork treasury contract at TREASURY describes itself on-chain:
-manager() returns the account that controls it, KLIMA() the token it backs,
-reserveTokens(i) enumerates its registered reserve assets (an index past the
-end reverts), and totalReserves() / excessReserves() give its booked reserves
-in KLIMA's 9-decimal units, which is checked against KLIMA.decimals() before
-anything is scaled.
+The treasury contract at TREASURY exposes manager(), KLIMA(),
+reserveTokens(i), totalReserves() and excessReserves(). At the last block
+before 00:00 UTC on the first of each month (2021-10-01 to 2026-07-01) and
+at END_BLOCK, the registry is enumerated and, for every token it ever
+returned plus the tokens named in the module, totalSupply() and the
+balances of the treasury and of its manager are read. A contract without
+code is not_deployed; a refused getter is recorded as reverted.
 
-The set of tokens read is not fixed in advance. The registry is enumerated at
-every sampled block first, and the union of everything it ever returned --
-together with the tokens named below, which the paper reports -- is the set
-whose totalSupply() and balances are then read at every block. A registered
-address that would fall outside that set stops the run rather than being
-skipped, so no reserve asset can be dropped by being absent from a list.
-
-For every token in that set the module reads totalSupply() and the balances
-held by the treasury and by the treasury's manager at that block.
-
-Pinned blocks: the last block before 00:00 UTC on the first of each month,
-2021-10-01 to 2026-07-01 (fetch/chain.py, shared with fetch/inventory.py),
-and END_BLOCK, the last Polygon block before 2026-07-26 00:00 UTC.
-
-Explicit statuses instead of missing values: a contract with no code yet is
-not_deployed; a getter the contract refuses is recorded as reverted, a
-refusal being the node's execution-reverted code and nothing else.
-
-Outputs:
-  data/treasury.csv        one row per month per reserve token:
-                           date, as_of_instant, block, token, token_status,
-                           registered, supply, treasury, share, manager,
-                           manager_balance, manager_share
-  data/treasury_state.csv  one row per month: date, as_of_instant, block,
-                           status, manager, klima, reserve_tokens,
-                           total_reserves, excess_reserves,
-                           excess_reserves_status, klima_supply
-  data/treasury_cross.csv  the per-token rows at END_BLOCK
-Raw: data/raw/treasury/{registry,month}/<date>.json, one file per sampled
-     block per stage, so an interrupted run resumes where it stopped
+Outputs: data/treasury.csv (per month and token), data/treasury_state.csv
+(per month), data/treasury_cross.csv (at END_BLOCK). Raw under
+data/raw/treasury/.
 
 Usage:
     uv run python -m klimafrac.fetch.treasury

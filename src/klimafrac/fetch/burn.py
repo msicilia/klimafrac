@@ -1,48 +1,19 @@
 """
-The October 2025 BCT burn, derived from the chain.
+The October 2025 BCT burn, recomputed from Polygon state. Not used in the
+paper.
 
-Every number is recomputed from Polygon state; nothing is typed in. Not
-used in the paper.
+Stages, each cached under data/raw/burn/<stage>.json: the month's decline
+in totalSupply(); bisection to the single block of the burn, cross-checked
+against the reconciled mint and burn events of fetch/inventory.py; the
+Transfer logs, transactions and receipts of that block; the burning
+account, its Safe configuration and its treasury roles; any pool of
+fetch/pools.py touched by the burn transactions; the TCO2 credits released
+and where they went; and the exact all-time supply peak. Amounts are kept
+as decimal strings.
 
-  1. Month.       S(a) and S(b), BCT totalSupply() at a and b, the last blocks
-                  before 00:00 UTC on 1 October and 1 November 2025. The
-                  month's decline is S(a) - S(b).
-  2. Bisection.   Starting from [a, b], halve the interval and keep the half
-                  across which totalSupply() falls further, until it spans a
-                  single block B. S(B-1) - S(B) is the decrease in B.
-  3. Cross-check. The reconciled mint and burn events of fetch/inventory.py
-                  give the net supply change of every block in the month. B
-                  must be the block with the largest net decrease, by the same
-                  amount, and the month's events must sum to the decline.
-  4. Block.       BCT Transfer logs in B (eth_getLogs over one block), the
-                  transactions carrying the burns, and their receipts.
-  5. Account.     The address whose BCT was burned. If it is a Gnosis Safe:
-                  getOwners(), getThreshold() and VERSION() at B. Whether it
-                  is manager() of the KlimaDAO treasury at B-1 and B, and what
-                  the treasury's role registries (isReserveManager(), ...)
-                  return for it. Where its BCT came from since July 2025.
-  6. Markets.     Whether any log in the burn transactions was emitted by, or
-                  moved tokens to or from, a pool in fetch/pools.py, and
-                  whether any carries a swap event of a known DEX family.
-  7. Credits.     The TCO2 tokens that left the BCT pool in those transactions,
-                  where they went (to the zero address = retired in the same
-                  transaction), and how much of each the burner still held at
-                  B and at END_BLOCK.
-  8. Peak.        The exact all-time peak of BCT supply from the event path,
-                  confirmed by totalSupply() either side of its first block.
-                  It is the peak of the path, not of a monthly grid: the grid
-                  labels 00:00 on the first of a month and reports the supply
-                  immediately before it, so a peak reached in late May is
-                  sampled as June.
+Output: data/burn.json.
 
-Each stage is cached as data/raw/burn/<stage>.json and skipped when present,
-so an interrupted run resumes instead of redoing the chain reads. Exact
-amounts are stored as decimal strings, never as floats.
-
-Output data/burn.json, including a `claims` block comparing each paper
-figure with the value computed.
-
-Usage (after klimafrac.fetch.inventory and klimafrac.fetch.treasury exist):
+Usage (after fetch.inventory and fetch.treasury):
     uv run python -m klimafrac.fetch.burn
 """
 

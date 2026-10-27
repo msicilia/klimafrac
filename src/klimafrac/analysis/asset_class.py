@@ -1,154 +1,34 @@
 """
-Carbon tokens against conventional crypto: the asset-class gap in the
-positive-q spectrum, what data construction contributes to it, how much the
-design can resolve, and the price paths behind it: the paper's Table
-tab:contrasts and the first part of its section between asset classes.
-Figures fig5_prices and fig6_comparative are drawn but not in the paper.
+Carbon tokens against the deep conventional pools on the hourly clock: the
+paper's Table tab:contrasts, with the construction control and the size and
+power of the window-level design.
 
-Series. Nine hourly series in three groups:
-  carbon        BCT, NCT, MCO2, KLIMA, reconstructed from their Polygon
-                pools (polygon_<SYMBOL>)
-  reconstructed WETH on Sushiswap (WETH_S), WETH and WBTC on Quickswap
-                (WETH_Q, WBTC_Q), reconstructed by the same code path from
-                the same two factories
-  aggregated    BTC and ETH from the DefiLlama snapshot (fetch/benchmark.py)
+Series: BCT, NCT, MCO2 and KLIMA from their Polygon pools; WETH on Sushiswap,
+WETH and WBTC on Quickswap, rebuilt by the same path; BTC and ETH from the
+DefiLlama snapshot (fetch/benchmark.py). Every series is on the hourly grid
+of trades.calendar over the estimation sample and cut into non-overlapping
+windows of trades.WINDOW returns, each with its positive-side width.
 
-Clock. Every series is on the hourly calendar grid and every window is
-4,000 consecutive hourly returns (trades.WINDOW), non-overlapping, with the
-positive-q width from trades.windows (s_max = 400, q in [0.5, 5]). The
-estimation sample is the same for all nine: observations strictly before
-trades.SAMPLE_END (2026-05-27 00:00 UTC). A reconstructed grid is
-trades.calendar on trades.trades: from the hour of the pool's first cleaned
-trade to the last hour before SAMPLE_END, last price carried forward, with
-no_trade set for hours without a trade. The aggregated grid runs from the
-first vendor instant (2021-10-08 00:00) to the same last hour; the vendor
-point for instant t labels hour t. That point is a price near t rather than
-the close of [t, t+1h), a one-hour labelling offset that cannot affect a
-single series' width.
+Contrasts, as the second group's median window width minus the first's,
+each repeated with the reconstructed windows restricted to a no-trade
+fraction of at most 0.30 and 0.05:
+  A  carbon      vs reconstructed conventional   the asset
+  B  aggregated  vs reconstructed conventional   the construction only
+  C  carbon      vs aggregated conventional      both
+Tests: stats.permutation_test on windows, and the exact test that reassigns
+whole tokens between the groups (token_test). Size and power are simulated
+on multifractal random walks at the empirical window counts, on clean series
+and under the empirical no-trade flags. Daily price paths and the figures
+fig5_prices and fig6_comparative are also written; neither figure is in the
+paper.
 
-Vendor missing bars. The vendor returns nothing for some instants (listed in
-data/vendor_manifest.json). They are forward-filled on the complete grid, so
-every window is 4,000 consecutive hours as on the reconstructed side, and
-each window records how many filled bars its prices touch. Differencing only
-the priced bars instead would silently stitch 4,000 "hourly" returns across
-holes of up to 11 hours. Every contrast is repeated with the aggregated
-windows that touch a filled bar dropped, and the number dropped is reported.
-
-Staleness restriction. A reconstructed window is kept under a restriction
-when its no-trade fraction -- the share of its hours flagged no_trade from
-the trades themselves -- is at most 0.30 (the tolerance derived in Section
-4.1.2) or 0.05. The fraction of zero returns is not used: an hour whose
-trades leave the price unchanged is not an hour without trading. An
-aggregated series has no trade record, so no no-trade fraction exists for it
-and it is not restricted: every aggregated window enters every restricted
-row, and in contrasts B and C the restriction acts on the reconstructed side
-only. Its filled-bar fraction is a vendor coverage property and is not
-substituted for staleness.
-
-Contrasts. Gap = median window width of the second side minus the first,
-tested with stats.permutation_test (two-sided, exact when enumerable):
-  A  carbon       - reconstructed   asset class only (the estimate)
-  B  aggregated   - reconstructed   construction only, same exposures
-  C  carbon       - aggregated      both (the conventional comparison)
-With the same window subsets, A - B = C holds exactly for medians of the same
-windows, whatever the data; it is written as an identity check, not as
-evidence that the two factors decompose. The window-level test treats
-windows as exchangeable although windows of one token are contiguous and
-tokens are linked (KLIMA is backed by BCT); the token-level test below is
-the inference that respects the design.
-
-Composition. Per contrast and restriction, the windows each token
-contributes and the token supplying most of each side.
-
-Token level. For every contrast and restriction, an exact test over all
-assignments of whole tokens, windows attached, to the two sides, keeping the
-side sizes (A: C(7,4) = 35). The statistic is the same median-of-windows gap.
-Reported: the observed rank among assignments, the upper-tail p (share of
-assignments with gap >= observed), the two-sided p (|gap| >= |observed|), and
-the minimum attainable value of each. With unequal sides an assignment's
-complement is not an assignment, so the null distribution is not symmetric
-and the minimum two-sided p is 1/35, not 2/35; the attainable minimum is
-computed from the realised gaps, so ties raise it. Also: the gap with each
-token left out, per-token medians, and whether every carbon token's median
-exceeds every reconstructed conventional token's.
-
-Size and power. For each contrast and restriction at its empirical window
-counts. Each window is an independent multifractal random walk of 4,000
-increments (synthetic.mrw, integral scale synthetic.INTEGRAL_SCALE, the same
-for every window and group). A calibration curve maps lambda2 to the median
-simulated window width; each side's lambda2 is set so its calibrated width
-equals that side's empirical median width. Points:
-  size       both sides at the first side's lambda2
-  observed   each side at its own calibrated lambda2
-  ladder     second side at the lambda2 whose calibrated width exceeds the
-             first side's by each gap in GAP_LADDER
-Targets beyond the calibration curve are clipped and flagged; the calibrated
-gap is reported next to the target. Two variants share the same draws:
-  clean      the MRW increments as generated
-  no_trade   each reconstructed window (carbon or conventional) is replaced
-             by carry-forward sampling under the real no_trade flags of the
-             empirical window it stands for: an untraded hour returns zero
-             and the next traded hour returns everything accumulated since.
-             Aggregated windows have no flags and stay clean.
-Under no_trade the size point measures whether the staleness difference
-alone, at an equal process, produces a rejection. Rejection is p < 0.05 from
-stats.permutation_test with POWER_DRAWS draws; the rejection rate's Monte
-Carlo standard error is reported. The first side's windows are shared by all
-ladder points of a replication (common random numbers). Every stream is
-seeded from np.random.SeedSequence([SEED, cell, rep, side, point]), and each
-permutation test from a distinct integer, so no two draws share a seed.
-Independent windows are exactly what the window-level permutation test
-assumes; the simulation therefore checks that test on its own terms and does
-not address dependence between a token's windows.
-
-Staleness bound. From data/results/staleness.json (analysis/staleness.py) at
-its base cell (N = 20,000, lambda2 = 0.10): the largest deviation of the
-median positive-q width from its value at p = 0, for i.i.d. inactivity and
-for clustered (Markov, mean quiet runs 5 and 20), in width units, and its
-ratio to the observed gap A. The range over the p grid is also taken from
-staleness_curves.csv, at the base cell and at N = 5,000, the length nearest
-the 4,000-hour window. If staleness.json is absent nothing is computed.
-
-Prices (Figure fig5_prices). Daily close of day D (UTC): the last cleaned
-trade price at or before the end of D for carbon tokens, the last priced
-hourly vendor bar at or before D 23:00 for BTC and ETH; both carried forward
-over days without an observation. Conventions:
-  base      close of 18 October 2021
-  peak      maximum daily close over November 2021
-  trough    minimum daily close over calendar 2022
-  end       last observed price strictly before SAMPLE_END
-  drawdown  1 - trough / peak, and 1 - trough / base
-  end value end / base - 1
-A series without an observation by the end of the base day (or in November
-2021) has no base (or peak) value; those tokens are listed, and their end
-relative to their own first daily close is given separately. The figure
-indexes series with a base to 100 at the base close and the others to 100 at
-their first daily close, drawn dashed and labelled as such.
-
-Figure fig6_comparative. Every unrestricted window of the three groups, gaps
-filled, one row per token, with token and group medians, drawn from
-asset_class_windows.
-
-Outputs (via klimafrac.results):
-  data/results/asset_class_windows.csv    one row per window of every series
-  data/results/asset_class_contrasts.csv  A, B, C and the identity row, per
-                                          restriction and vendor-gap handling,
-                                          with composition
-  data/results/asset_class_tokens.csv     per-token summary, leave-one-out
-                                          gaps and exact token-level tests
-  data/results/asset_class_power.csv      size and power per contrast,
-                                          restriction, variant and point
-  data/results/asset_class_prices.csv     price conventions per series
-  data/results/asset_class.json           every number the paper cites
-  figures/fig5_prices.png, figures/fig6_comparative.png
---quick uses 999 permutation draws, 20 replications and a short ladder,
-suffixes every output _quick and writes no figures. The full run needs every
-swap file; it stops naming the missing ones otherwise.
+Outputs (data/results/): asset_class_windows.csv, asset_class_contrasts.csv,
+asset_class_tokens.csv, asset_class_power.csv, asset_class_prices.csv,
+asset_class.json. --quick shortens every simulation and suffixes outputs
+_quick.
 
 Usage:
-    uv run python -m klimafrac.analysis.asset_class
-    uv run python -m klimafrac.analysis.asset_class --reps 500 --draws 20000 --jobs 12
-    uv run python -m klimafrac.analysis.asset_class --quick
+    uv run python -m klimafrac.analysis.asset_class [--quick]
 """
 
 import argparse

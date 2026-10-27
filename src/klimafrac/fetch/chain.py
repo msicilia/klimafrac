@@ -1,33 +1,18 @@
 """
 Shared on-chain helpers for the non-swap fetchers.
 
-  metered(chain)           a JSON-RPC client that counts every call it makes,
-                           so each module can report what its run cost
-  Blocks.block_before(ts)  the last block whose timestamp is strictly earlier
-                           than ts. A state "at 2025-10-01" is the state after
-                           that block: immediately before 00:00 UTC that day.
-                           Found by bracketed interpolation search on
-                           eth_getBlockByNumber, exact to the block.
-  Blocks.deployment(addr)  the first block at which addr has code.
-  logs_in_range(...)       eth_getLogs over an arbitrary span, split into
-                           sub-ranges that follow the node's own hint when a
-                           response would exceed its 10,000-log limit.
+  metered(chain)           a JSON-RPC client that counts its calls
+  Blocks.block_before(ts)  the last block whose timestamp is before ts, by
+                           bracketed interpolation search; the state "at" an
+                           instant is the state after that block
+  Blocks.deployment(addr)  the first block at which addr has code
+  logs_in_range(...)       eth_getLogs over a span, split to the node's
+                           10,000-log limit
 
-Blocks are cached in data/raw/blocks/<chain>.json, so each is computed once
-and every fetcher reads the same block for the same instant. The cache keeps
-each block's hash next to its timestamp -- the hash is in the same response
-and costs nothing extra -- and records the chain id, the endpoint and when it
-was read, so a cache can never be silently attributed to the wrong chain.
-
-Every helper raises on failure. Two outcomes are treated as answers rather
-than errors, and both mean the node ran the call and no value came back. One
-is an explicit revert, JSON-RPC code 3, which `call_or_revert` returns as
-None: that is how a contract says an index is out of range or a function does
-not exist. The other is a call the EVM could not finish -- it exhausts the
-gas cap, or trips an invalid opcode -- which arrives under -32000, the code
-the node also uses when it is merely unwell, so those are told apart by
-message against the closed list in EVM_FAILURES and recorded in UNANSWERED.
-Anything else under -32000 stays a fault and is retried.
+Blocks are cached in data/raw/blocks/<chain>.json with their hash, chain id
+and endpoint. Every helper raises on failure; an explicit revert (code 3)
+is returned as None by `call_or_revert`, and a call the EVM could not
+finish (a -32000 message listed in EVM_FAILURES) is recorded in UNANSWERED.
 """
 
 import bisect

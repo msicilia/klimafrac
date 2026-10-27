@@ -1,51 +1,29 @@
 """
-How far the benchmark comparison depends on choices made along the way.
-
-analysis/thin_benchmark.py compares carbon, thin, deep and active tokens under
-one set of choices. This module repeats exactly that comparison -- same
-contrasts, same token-level tests -- changing one family of choices at a
-time, the rest held at the values the paper uses. The families deep,
-cleaning, endpoint, window, s_min, s_max, scales, order and q were listed
-before any variant was run; floor was added after the cleaning grid had been
-seen (see below), and fit after the scaling diagnostics of analysis/scaling.py
-had been seen.
+The benchmark comparison of analysis/thin_benchmark.py repeated under one
+family of variants at a time, the rest at the paper's values: the paper's
+Tables tab:benchmark_cleaning and tab:benchmark_variants.
 
   baseline   the paper's choices; must reproduce thin_benchmark.json
-  deep       WETH counted once: the deep group without its Quickswap WETH
-             pool, and without its Sushiswap one
-  cleaning   the 32 combinations of analysis/tiers.py: smallest trade in
-             dollars {0, 0.10, 1, 10}, smallest trade in base units {0, 1e-4},
-             rolling-median filter {2, 3, 5, off}
-  floor      the dollar floor alone, between and beyond the grid's values:
-             0.25, 0.5, 2, 3, 5, 7.5 and 20. Added after the grid showed the
-             comparison to depend on it, to see where the dependence sets in.
-  endpoint   the whole data window (to 2026-07-26), and the ends of the last
-             complete calendar year and quarter before the estimation sample
-             stops (2026-01-01, 2026-04-01). The thin pools stay the ones
-             selected on the estimation sample.
-  window     2,000 and 8,000 hourly returns per window
-  s_min      smallest scale 16 and 20
-  s_max      largest scale N/5 and N/20
-  scales     10 and 40 logarithmically spaced scales
-  order      detrending polynomial of order 2 and 3
-  q          q in [0.5, 3], [0.5, 4], [0.5, 5], [1, 5] and [0.5, 6], in steps of
-             0.5, leaving out whichever of them is the baseline
-  fit        only windows whose log-log fit has r2 of at least 0.90, and at
-             least 0.95, at every q: the comparison on windows that scale
+  deep       the deep group without its Quickswap WETH pool, and without
+             its Sushiswap one
+  cleaning   the 32 settings of analysis/tiers.py: dollar floor
+             {0, 0.10, 1, 10}, base floor {0, 1e-4}, median filter
+             {2, 3, 5, off}
+  floor      the dollar floor alone: 0.25, 0.5, 2, 3, 5, 7.5 and 20
+  endpoint   the whole data window, 2026-01-01 and 2026-04-01
+  window     2,000 and 8,000 returns per window
+  s_min      16 and 20;  s_max  N/5 and N/20;  scales  10 and 40
+  order      detrending order 2 and 3
+  q          [0.5, 3], [0.5, 4], [0.5, 5], [1, 5], [0.5, 6], less the baseline
+  fit        windows whose fit has r2 >= 0.90, and >= 0.95, at every q
+Widths under another q range, window or order are not on the baseline's
+scale; the gap's sign and the tests are what is compared.
 
-Widths under a different q range, window or detrending order are not on the
-baseline's scale, so levels are not compared across variants; the gap's sign,
-the tests and the ordering of the groups are.
-
-Outputs (via klimafrac.results):
-  data/results/thin_robustness.csv         one row per variant and contrast
-  data/results/thin_robustness_groups.csv  one row per variant and group, with
-                                           the share of trades cleaning removes
-  data/results/thin_robustness.json        counts across variants
+Outputs (data/results/): thin_robustness.csv, thin_robustness_groups.csv,
+thin_robustness.json.
 
 Usage:
-    uv run python -m klimafrac.analysis.thin_robustness
-    uv run python -m klimafrac.analysis.thin_robustness --family cleaning
+    uv run python -m klimafrac.analysis.thin_robustness [--family cleaning]
 """
 
 import argparse

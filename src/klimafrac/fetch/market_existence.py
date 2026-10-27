@@ -1,83 +1,30 @@
 """
-Which markets each carbon token ever had, read from the chain.
+Which markets each carbon token ever had, read from the chain at END_BLOCK
+(Polygon 90,879,334, Base 49,117,326).
 
-Everything is pinned at END_BLOCK on each chain, the last block before
-2026-07-26 00:00 UTC: Polygon 90,879,334, Base 49,117,326. Four censuses.
+  1. Transfer logs   every Transfer of every token in scope, stored verbatim
+                     and reconciled against totalSupply() at END_BLOCK
+  2. Factory census  every pairing of each token with each quote looked up
+                     in every factory (constant-product, Solidly, V3 fee
+                     tiers, Algebra), each factory and pool verified
+                     on-chain; per pool, the carbon token's transfers in and
+                     out, whether the quote was ever received, and LP supply
+  3. Registries      the Curve registry and Uniswap V4 Initialize logs
+  4. Holder census   every counterparty of every token classified by code
+                     and pool interface, so venues without a factory show
+                     up; for UBO and NBO, the receipts of every transaction
+                     that moved the token, listing direct exchanges against
+                     a stablecoin
 
-1. Transfer logs. Every Transfer event of every token in scope, read with
-   eth_getLogs over the token's own address and stored verbatim under
-   data/raw/market_existence/logs/. This is the primitive record from which
-   every count below is derived, so a count can be re-audited without asking
-   the node again, and it is also the complete holder set of each token. Each
-   token's log stream is reconciled against totalSupply() at END_BLOCK --
-   minted minus burned must equal it to the unit -- which is what establishes
-   that no Transfer is missing. Where a mint comes from is a property of the
-   token: the carbon tokens issue from the zero address, KLIMA from its own
-   address, as Olympus forks do (see MINTS_FROM_SELF).
+Quotes: USDC.e, USDC, USDT, DAI, WETH, WMATIC and the carbon tokens on
+Polygon; USDC and WETH on Base. The venues are listed in the module.
 
-2. Factory census. Every pairing of each token with each quote is looked up
-   in every factory at END_BLOCK. Factories never remove pools, so a pool
-   created at any time up to END_BLOCK is found. Each factory is first
-   verified on-chain: it must resolve a reference pair to a contract whose
-   factory(), token0() and token1() match; every pool found is checked the
-   same way. For each pool the transfers of the carbon token into and out of
-   it are counted from the stored logs (exactly, over the whole chain, not
-   sampled); whether it ever received the quote token is read from the chain;
-   and, for constant-product and Solidly pairs, its LP totalSupply() at
-   END_BLOCK, non-zero if and only if liquidity was ever added (the first
-   mint locks MINIMUM_LIQUIDITY for good).
-
-     Polygon quotes    USDC.e, USDC (native), USDT, DAI, WETH, WMATIC, and the
-                       six carbon tokens against one another
-     Polygon venues    getPair: Sushiswap, Quickswap, Uniswap V2, ApeSwap,
-                       Dfyn, JetSwap, Polycat, MeshSwap, ComethSwap, Elk,
-                       RadioShack; getPair(stable): Dystopia; getPool with fee
-                       tiers 100/500/3000/10000: Uniswap V3, Sushiswap V3,
-                       Retro; poolByPair: Quickswap V3 (Algebra)
-     Base quotes       USDC, WETH, for bridged BCT
-     Base venues       getPool(stable): Aerodrome; getPool(tickSpacing)
-                       1/50/100/200/2000: Aerodrome Slipstream; getPool with
-                       fee tiers: Uniswap V3 Base; getPair: SushiSwap Base,
-                       BaseSwap
-
-3. Registry and singleton venues, which have no per-pair factory. The Curve
-   registry is asked for a pool holding each pair of coins, and the Uniswap V4
-   PoolManager's Initialize logs are scanned on both chains for a pool whose
-   currency0 or currency1 is a token in scope.
-
-4. Holder census. Every counterparty of every token, taken from the stored
-   logs, classified by code and pool interface (token0/token1/symbol). A
-   token that traded on a venue with no per-pair factory -- Balancer, DODO, a
-   fork not listed above -- must have a contract of that venue among its
-   counterparties, so this is what makes the factory census's blind spots
-   observable. For UBO and NBO the receipt of every transaction that moved
-   the token is read as well: a contract whose net flow of the token and net
-   flow of a stablecoin have opposite signs within one transaction exchanged
-   the one for the other directly, whatever venue it belongs to. Opposite
-   flows are not proof of a trade (a vault deposit of one token and
-   withdrawal of another in one transaction looks the same), so the events
-   are listed for inspection rather than counted as markets.
-
-Outputs:
-  data/market_existence.csv          one row per (chain, token, quote, venue,
-                                     variant) lookup, pool or not: status,
-                                     pool, transfers_in/out, first/last
-                                     transfer block, quote_ever_received, LP
-                                     supply, END_BLOCK balances
-  data/market_existence_holders.csv  every counterparty of every token:
-                                     address, transfers, is_contract, token0,
-                                     token1, symbol, stablecoin_pool
-  data/market_existence.json         scope, factory verification, log
-                                     reconciliation, per-token summary,
-                                     registry and singleton venues,
-                                     direct-exchange candidates
-Raw: data/raw/market_existence/ (logs, per-pool reads, caches, manifest.json,
-     rpc_calls_<chain>.json)
+Outputs: data/market_existence.csv (one row per lookup),
+data/market_existence_holders.csv, data/market_existence.json. Raw under
+data/raw/market_existence/.
 
 Usage:
-    uv run python -m klimafrac.fetch.market_existence
-    uv run python -m klimafrac.fetch.market_existence --estimate
-    uv run python -m klimafrac.fetch.market_existence --receipts UBO --receipts NBO
+    uv run python -m klimafrac.fetch.market_existence [--estimate] [--receipts UBO]
 """
 
 import argparse

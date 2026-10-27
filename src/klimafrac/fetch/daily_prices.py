@@ -1,30 +1,17 @@
 """
-DefiLlama's daily USD prices for the carbon tokens, Polygon and Base.
+DefiLlama's daily USD prices for the carbon tokens, an object of study
+rather than an input: the aggregated rows of the calendar-time tables.
 
-These aggregated series are an object of study, not an input: the paper
-compares them with prices reconstructed from the swaps (the aggregated rows
-of the calendar-time tables). No carbon-token result is estimated from them.
+Source https://coins.llama.fi/chart/<chain>:<token address>, stored verbatim
+by fetch/defillama.py. The BCT_base column requests the bridged BCT
+contract on Base from the same start as the Polygon series, so the bars the
+vendor returns for instants before Base existed are in the stored data.
+Window: from each token's Polygon deployment, not before 2021-10-08, to
+2026-07-26 00:00 UTC exclusive.
 
-Source: https://coins.llama.fi/chart/<chain>:<token address>, stored verbatim
-by fetch/defillama.py, which documents the bar convention. DefiLlama serves
-one blended price per asset whichever chain address is queried, and the
-BCT_base column is what makes that visible: it requests the price of the
-bridged BCT contract on Base from the same 2021-10-08 start as the Polygon
-series, so the bars the vendor returns for instants before Base mainnet
-existed (block 0, 2023-06-15) are in the stored data rather than asserted.
-Its `chain_genesis_instant` in data/vendor_manifest.json is read from the
-chain.
-
-Pinned window: from each series' start -- for the Polygon tokens the first
-00:00 UTC at or after the token's Polygon deployment block, but not before
-2021-10-08 -- to 2026-07-26 00:00 UTC exclusive. Deployment blocks are read
-from the chain (Alchemy key needed the first time; cached in data/raw/blocks/).
-
-Outputs:
-  data/prices_full.csv        date, BCT, NCT, MCO2, KLIMA, BCT_base
-                              (price at 00:00 UTC)
-  data/vendor_manifest.json   snapshot used, coverage, missing bars
-Raw: data/raw/defillama/chart_1d_carbon/<retrieved>/
+Outputs: data/prices_full.csv (date, BCT, NCT, MCO2, KLIMA, BCT_base at
+00:00 UTC), data/vendor_manifest.json. Raw under
+data/raw/defillama/chart_1d_carbon/<retrieved>/.
 
 Usage:
     uv run python -m klimafrac.fetch.daily_prices [--refresh | --snapshot YYYY-MM-DD]

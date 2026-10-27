@@ -1,43 +1,20 @@
 """
 Pool reserves at every daily boundary, and the pool value they imply.
 
-The pool value is read from the chain, so it has to come from the pool's
-own balance sheet rather than from an aggregator. For each pool in
-fetch/pools.py this module calls getReserves() at the last block before 00:00
-UTC on every day of the window and records both reserves exactly.
+For each pool in fetch/pools.py, getReserves() at the last block before
+00:00 UTC on every day from 2021-10-01 to 2026-07-26, on Polygon and Base.
+Value = base_reserve x price + quote_reserve x quote_usd, where price is the
+pool's own reserve ratio and quote_usd is 1 for stablecoins and, for the
+KLIMA-quoted pools, the KLIMA/USDC.e spot at the same block. A pool
+contributes rows from the day its pair has code; an empty pool has value
+zero and no price.
 
-Value. A constant-product or Solidly pair holds both legs, so
-    value = base_reserve x price + quote_reserve x quote_usd
-where price is the pool's own spot, quote_reserve / base_reserve adjusted for
-decimals -- the price the pool would quote for an infinitesimal trade, taken
-from the same reading as the reserves, so no external series enters. The only
-assumption is what a unit of the quote is worth in dollars: 1.0 for USDC,
-USDC.e and other stablecoins, and for KLIMA-quoted pools (UBO, NBO) the spot
-of the KLIMA/USDC.e pool at the same block, which is itself read here. Every
-row records `quote_usd` and where it came from, so an alternative convention
-can be applied to the stored reserves without refetching.
-
-Pinned range: the last block before 00:00 UTC on each day from 2021-10-01 to
-2026-07-26 inclusive, on Polygon and on Base, the boundary blocks being the
-same ones fetch/inventory.py and fetch/treasury.py use. A pool contributes
-rows only from the day its pair contract has code; before that its status is
-not_deployed. A pool holding no reserves is `empty`: its value is zero and
-its price is undefined, which is a reading rather than a failure.
-
-Outputs:
-  data/reserves_daily.csv   date, as_of_instant, chain, pool, pair, block,
-                            status, reserve0_raw, reserve1_raw,
-                            base_reserve, quote_reserve, price,
-                            quote_symbol, quote_usd, value_usd
-  data/reserves_summary.json  per pool: pair identity, decimals, first and
-                            last day with reserves, peak value and when it
-                            was reached, value at the window end
-Raw: data/raw/reserves/<pool>/<year>.json, pools.json, manifest.json,
-     rpc_calls_<chain>.json
+Outputs: data/reserves_daily.csv (date, chain, pool, block, status, raw and
+adjusted reserves, price, quote_usd, value_usd), data/reserves_summary.json.
+Raw under data/raw/reserves/<pool>/.
 
 Usage:
-    uv run python -m klimafrac.fetch.reserves
-    uv run python -m klimafrac.fetch.reserves --pool polygon_BCT
+    uv run python -m klimafrac.fetch.reserves [--pool polygon_BCT]
 """
 
 import argparse

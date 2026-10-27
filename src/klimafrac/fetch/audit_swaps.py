@@ -1,33 +1,20 @@
 """
-Independent check of every swap file against the chain.
+Independent check of every swap file against the chain, by routes that
+share no code with fetch/swaps.py: its own event decoder, transaction
+receipts instead of log queries, and block timestamps.
 
-fetch/swaps.py builds the files from the pair's own logs and proves internal
-completeness by reconciling the reserve path. This module checks the result
-from outside, by routes that share as little with it as possible: it decodes
-events with its own decoder rather than importing one, reads transactions
-through receipts rather than through log queries, and verifies the timestamps
-against the blocks themselves, which is the one step in the pipeline nothing
-else corroborates.
-
-  receipts     for a sample of rows stratified by year, the transaction
-               receipt is fetched and every Swap log the pair emitted in it is
-               decoded here and compared with the file's rows for that
-               transaction: same order, same exact amounts, nothing missing,
-               nothing extra, and every row's log_index belongs to the
-               transaction. Any difference is a discrepancy; there are no
-               expected ones.
+  receipts     for a sample of rows stratified by year, every Swap log the
+               pair emitted in the transaction is decoded and compared with
+               the file's rows: order, exact amounts, nothing missing or extra
   ranges       complete block ranges are read back with eth_getLogs and
-               compared with every row in those blocks, in order. Half the
-               ranges are drawn at random, and the rest sit on the boundaries
-               between stored chunks, where an error in chunking would hide.
-  timestamps   a sample of rows is checked against the timestamp of its own
-               block.
+               compared row by row; half the ranges sit on the boundaries
+               between stored chunks
+  timestamps   a sample of rows against the timestamp of its block
 
-Writes data/swaps_audit.json and exits non-zero if anything disagrees.
+Writes data/swaps_audit.json and exits non-zero on any discrepancy.
 
 Usage:
-    uv run python -m klimafrac.fetch.audit_swaps
-    uv run python -m klimafrac.fetch.audit_swaps --pool polygon_NCT --receipts 2000
+    uv run python -m klimafrac.fetch.audit_swaps [--pool polygon_NCT --receipts 2000]
 """
 
 import argparse

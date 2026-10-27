@@ -1,76 +1,20 @@
 """
-Pool inventory, pool value and the October 2025 BCT redemption, read from
-the chain. Not used in the paper.
+Pool inventory in tonnes, pool value and the October 2025 BCT redemption,
+from the outputs of fetch/inventory.py, fetch/burn.py and the swap files.
+Not used in the paper.
 
-Nothing is fetched or typed in here. The module reads what the fetchers wrote:
-  data/inventory.csv, data/inventory_daily.csv, data/inventory_summary.json
-      BCT, NCT, UBO and NBO totalSupply() in tonnes (fetch/inventory.py),
-      reconciled to the unit against the mint and burn event stream
-  data/burn.json
-      the October 2025 burn located by bisection on totalSupply(), the
-      burning account, its Safe configuration, the treasury manager() check,
-      the pools and swap events in the burn transaction, and where the
-      redeemed credits went (fetch/burn.py)
-  data/swaps_polygon_BCT.csv.gz, data/swaps_polygon_NCT.csv.gz
-      through trades.trades(key, full_window=True)
-  data/raw/defillama/protocol_toucan-protocol/   optional, comparison only
+Tonnes on day D is the supply at the end of D. Pool value on D is tonnes
+times the median price of the pool's cleaned swaps on D, carried forward
+and flagged on days without a swap. The fall in value to the last complete
+day before the burn is reported from the launch maximum and the 2022
+maximum, decomposed into price and tonnage ratios. Redemption follows the
+TCO2 credits released by the burn through the record of fetch/burn.py.
 
-Inventory. A value dated D in inventory_daily.csv is the supply immediately
-before 00:00 UTC on D. Here tonnes on day D means the supply at the END of D,
-i.e. the row dated D + 1, so that a day's tonnage and that day's trades
-describe the same interval. The exact all-time peak is the block-level peak
-from the event path; the monthly sample is reported next to it because it
-lands on the first of the following month.
-
-Pool value. value(D) = tonnes at the end of D x the median price of the
-pool's cleaned swaps executed on D (USDC per token). Days without a cleaned
-swap carry the last median forward and are flagged `price_carried`; days
-before the pool's first cleaned swap have no value. The median rather than
-the close is used because a single late swap against thin liquidity would
-otherwise set a whole day's valuation. Both pools are USDC-quoted, so no
-KLIMA conversion enters. This replaces the vendor value panel: DefiLlama's
-BCT series ends on 2024-03-29 and its implied price runs 0.35 -> 1.27 in the
-final days, so it cannot reach the burn. The vendor series is kept as the
-column `vendor_usd_defillama` (fetch/depth.load_depth with its documented
-masks) for comparison only; it is never plotted and no number depends on it.
-
-The fall in value is reported from two reference maxima, both taken over
-days strictly before the reference day:
-  launch   the largest daily value since the pool's first cleaned swap
-  2022     the largest daily value in calendar year 2022
-to the reference day, the last complete UTC day before the burn block (the
-burn is at 00:33 UTC, so the day of the burn would already include it). The
-fall is decomposed into its price and tonnage ratios, since value = price x
-tonnes; a fall with a tonnage ratio above one is a repricing only. Values
-after trades.SAMPLE_END are in the table and the figure but enter no cited
-number.
-
-Redemption. The burned BCT released the underlying TCO2 credits from the
-pool. fetch/burn.py records where those credits went in the burn
-transaction, how much the burning Safe still held at END_BLOCK, and every
-later transfer of them out of the Safe, flagged when the recipient is the
-zero address. A transfer to the zero address is the only on-chain retirement
-the record can show, so the numbers here say whether any occurred, not
-whether an off-chain registry later retired the credits.
-
-Outputs (via klimafrac.results):
-  data/results/inventory_monthly.csv      date, block, token, status, tonnes,
-                                          change_tonnes (from the previous
-                                          month), for BCT, NCT, UBO, NBO
-  data/results/inventory_value_daily.csv  date, token, tonnes, trades,
-                                          price_median, price, price_carried,
-                                          value_usd, in_sample,
-                                          vendor_usd_defillama
-  data/results/inventory.json             every number the section cites
-  figures/fig7_depth.png
-
-If a swap file is missing the inventory and redemption numbers and the
-monthly table are still written; the run then stops with a message naming
-the file, or exits cleanly with --no-prices.
+Outputs (data/results/): inventory_monthly.csv, inventory_value_daily.csv,
+inventory.json; figure fig7_depth.
 
 Usage:
-    uv run python -m klimafrac.analysis.inventory
-    uv run python -m klimafrac.analysis.inventory --no-prices
+    uv run python -m klimafrac.analysis.inventory [--no-prices]
 """
 
 import argparse

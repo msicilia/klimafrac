@@ -1,26 +1,15 @@
 """
-Conventional crypto benchmark: BTC and ETH prices from DefiLlama.
+BTC and ETH prices from DefiLlama, the aggregated side of the construction
+control in the asset-class comparison.
 
-A globally traded asset has no single pool to reconstruct, so the vendor's
-blended price is the instrument here. The series are the aggregated side of
-the construction control in the asset-class comparison.
+Source https://coins.llama.fi/chart/coingecko:{bitcoin,ethereum}, stored
+verbatim by fetch/defillama.py. Window: 2021-10-08 00:00 UTC to 2026-07-26
+00:00 UTC exclusive. The hourly and daily series are compared at the
+instants they share.
 
-Source: https://coins.llama.fi/chart/coingecko:{bitcoin,ethereum}, stored
-verbatim by fetch/defillama.py, which documents the bar convention.
-
-Pinned window: instants from 2021-10-08 00:00 UTC (the opening of the swap
-data window, block 20,000,000) to 2026-07-26 00:00 UTC exclusive.
-
-After both are built they are compared at the instants they share, and the
-comparison is recorded in data/vendor_manifest.json.
-
-Outputs:
-  data/benchmark_daily.csv    date, BTC, ETH   (price at 00:00 UTC each day)
-  data/benchmark_hourly.csv   date, BTC, ETH   (price at each hour)
-  data/vendor_manifest.json   snapshot used, coverage, missing bars, the
-                              hourly-against-daily comparison
-Raw: data/raw/defillama/chart_1d_benchmark/<retrieved>/,
-     data/raw/defillama/chart_1h_benchmark/<retrieved>/
+Outputs: data/benchmark_daily.csv and data/benchmark_hourly.csv (date, BTC,
+ETH), data/vendor_manifest.json. Raw responses under
+data/raw/defillama/chart_1{d,h}_benchmark/<retrieved>/.
 
 Usage:
     uv run python -m klimafrac.fetch.benchmark [--refresh | --snapshot YYYY-MM-DD]

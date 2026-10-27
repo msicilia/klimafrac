@@ -1,52 +1,19 @@
 """
-Pool inventory in tonnes, read from each pool token's own supply.
+Pool inventory in tonnes, from each pool token's own supply: a Toucan or C3
+pool token is minted 1:1 against deposited credits and burned when they
+leave, so totalSupply() is the tonnage held.
 
-A Toucan (BCT, NCT) or C3 (UBO, NBO) pool token is minted 1:1 against the
-credits deposited in the pool and burned when credits leave it, so its
-totalSupply() is the tonnage the pool holds. No vendor data enter here.
+Two readings that must agree to the unit at every sampled block: the sum of
+mint and burn Transfer events from deployment to END_BLOCK
+(alchemy_getAssetTransfers), and totalSupply() by eth_call at the last
+block before 00:00 UTC on the first of each month and at END_BLOCK. The
+event path gives the supply after every block in which it changed, hence
+the exact peak. A row labelled with an instant reports the state
+immediately before it.
 
-Two independent readings, which must agree exactly:
-
-  events  every mint (Transfer from the zero address) and burn (Transfer to
-          the zero address) of the token from its deployment block to
-          END_BLOCK, read with alchemy_getAssetTransfers. Summed, they give
-          the supply after every block in which it changed.
-  calls   totalSupply() by eth_call at the last block before 00:00 UTC on the
-          first of each month, and at END_BLOCK.
-
-The run fails unless the event sum equals totalSupply() to the unit at every
-one of those blocks, so no supply change escapes the event stream. The event
-path then gives the supply at any block, and the peak is exact rather than
-whatever a monthly grid happens to sample.
-
-Conventions. Both grids label an instant and report the state immediately
-BEFORE it: the row carrying as_of_instant 2025-06-01T00:00:00Z is the supply
-after the last block whose timestamp is earlier than that instant
-(fetch/chain.py), so a peak reached late in May is sampled by the June row.
-The grids are therefore a sample of the path, not the path: the exact peak
-comes from data/inventory_supply_path.csv, which carries the supply after
-every block in which it changed. Before a token's deployment its status is
-not_deployed and its supply 0; the outputs have no missing values.
-
-Pinned range: each token's deployment block to END_BLOCK, the last Polygon
-block before 2026-07-26 00:00 UTC.
-
-Outputs:
-  data/inventory.csv           monthly, 2021-10-01 to 2026-07-01:
-                               date, as_of_instant, block, <SYM> (tonnes),
-                               <SYM>_status
-  data/inventory_daily.csv     daily, 2021-10-01 to 2026-07-26:
-                               date, as_of_instant, token, status,
-                               supply_raw, tonnes
-  data/inventory_supply_path.csv  every block in which a supply changed:
-                               token, block, block_instant, net_raw,
-                               supply_raw, tonnes
-  data/inventory_summary.json  per token: deployment, event counts, exact
-                               all-time peak (value, first block, when it
-                               ended), supply at END_BLOCK, largest monthly
-                               decline, and the reconciliation performed
-Raw: data/raw/inventory/<SYM>/{mint,burn}_<from>_<to>.csv.gz, manifest.json,
-     rpc_calls_polygon.json
+Outputs: data/inventory.csv (monthly), data/inventory_daily.csv,
+data/inventory_supply_path.csv, data/inventory_summary.json. Raw under
+data/raw/inventory/<SYM>/.
 
 Usage:
     uv run python -m klimafrac.fetch.inventory

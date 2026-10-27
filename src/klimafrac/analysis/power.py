@@ -1,94 +1,28 @@
 """
 Size of the overlapping-window inference and power of the design the paper
-uses, both simulated on multifractal random walks: the paper's calibration
-section and the Power paragraph of its quality-ladder section.
+uses, simulated on multifractal random walks at the empirical window counts
+of the NCT vs BCT and MCO2 vs BCT comparisons.
 
-Both simulations reproduce the empirical comparison NCT vs BCT and MCO2 vs
-BCT, one design at a time and never pooled. Each simulated group is one MRW
-series (synthetic.mrw, integral scale synthetic.INTEGRAL_SCALE for both
-groups) whose length equals that token's number of trade-to-trade returns in
-the estimation sample, i.e. its cleaned trade count minus one, so the
-simulated designs have exactly the empirical window counts. The counts are
-read from the swap files, or given with --n-bct/--n-nct/--n-mco2.
+Each group is one MRW series (synthetic.mrw) as long as the token's
+trade-to-trade return series. The base intermittency is calibrated so that
+the median 4,000-return window width matches BCT's; the alternatives are
+placed on the same calibration curve at each gap of GAP_LADDER, upward when
+the curve allows and downward otherwise, and the true gap of every step is
+measured on a separate population of windows.
+  size   both groups at the base lambda2; windows of 4,000 advanced by 250,
+         widths regressed on a group dummy with Newey-West errors (maxlags
+         16); the same series then cut into non-overlapping windows and
+         tested with stats.permutation_test
+  power  the BCT-sized group at the base lambda2 and the other at each
+         alternative; non-overlapping windows and the permutation test at 5%
+Every replication is seeded from its (design, step, rep) identifier.
 
-Calibration. The base intermittency lambda2 is set so that the simulated
-median window width matches BCT's empirical median window width
-(4,000-return non-overlapping windows, estimation sample). For each lambda2
-on LAMBDA2_GRID we simulate CAL_WINDOWS windows and take the median width;
-the medians are made monotone with a running maximum and the target is
-inverted by linear interpolation. The same curve places the alternatives:
-the alternative for nominal gap g is the lambda2 whose median width is the
-base median plus g (ladder direction "up") or minus g ("down"). The default,
-"auto", goes up when every target is reachable that way and down otherwise:
-the width the family yields flattens out above lambda2 of about 0.5, so a
-base width near that ceiling, as BCT's is on the pool price, leaves no room
-above it. The direction is recorded. The nominal gap only positions the
-ladder; every result is reported against the true gap below, and power
-levels are read against its absolute value.
-
-True gap. For the base and every alternative lambda2 a separate population
-of POP_WINDOWS windows, drawn from a seed stream no test replication uses,
-gives the population median window width. The true gap at a step is the
-alternative's population median minus the base's; at step 0 the two
-processes are identical and the gap is zero by construction. Its standard
-error is a bootstrap over the independent series the populations are built
-from.
-
-(i) Size of the overlapping-window procedure, per design. Both groups share the base
-lambda2, so equality holds. Windows of 4,000 advance by 250; window widths
-of the two groups are stacked and regressed on a constant and a group dummy
-by OLS, with Newey-West (Bartlett) standard errors; equality is rejected when
-the dummy's p < 0.05. maxlags = WINDOW / STEP = 16, the lag at which two
-windows stop sharing observations, so the correction spans all of the
-dependence the overlap creates by construction. The Newey-West (1994) rule
-of thumb floor(4 (T/100)^(2/9)), shorter here, is recorded alongside. The
-same series are then cut into non-overlapping windows (the overlapping
-windows starting at multiples of 4,000, which are exactly trades.windows)
-and tested with stats.permutation_test. Rejection rates carry binomial
-standard errors sqrt(r (1 - r) / reps).
-
-(ii) Power of the actual design, per design. The BCT-sized group has the
-base lambda2 and the other group the alternative; non-overlapping windows
-(trades.windows) and stats.permutation_test at 5%, as in analysis/tiers.py.
-The table reports power at every step and the true gap at which power
-first exceeds 1/3, 1/2 and 0.8, interpolated linearly in the true gap
-between the bracketing steps.
-
-Permutation draws. Default 20,000, as in the empirical tests. The p-value
-of a replication is only compared with 0.05; with D draws its Monte Carlo
-standard error near 0.05 is sqrt(0.05 * 0.95 / D), 0.0015 at 20,000 and
-0.005 at 2,000, so --draws 2000 changes a rejection rate by far less than
-its binomial standard error at 500 replications (0.022 at 50%) and is an
-acceptable way to shorten a run.
-
-Seeds. A replication is identified by
-    rep_id = design_code * 10**8 + step * 10**5 + rep
-(step < 1,000, rep < 100,000), distinct for every (design, step, rep) by
-construction. Its series come from np.random.default_rng([1, rep_id]) and
-its permutation labels from stats.permutation_test(seed=rep_id), which are
-different streams. Calibration and population series use design codes 1
-and 2 with the grid or ladder index as step and the series index as rep.
-
-Outputs:
-  data/results/power_calibration.csv   median window width per lambda2
-  data/results/power_ladder.csv        alternatives and their true gaps
-  data/results/power_size.csv          one row per size replication
-  data/results/power_curve.csv         rejection rate per design and step
-  data/results/power.json              cited numbers
---quick shrinks every count not given explicitly and suffixes the outputs
-with _quick.
-
-Runtime with paper defaults, measured single-core per task: a size
-replication about 12 s (1,700 overlapping windows), a power replication
-about 1.6 s, so size about 7 core-hours, power about 5, calibration and
-populations about 15 core-minutes; on 16 idle cores roughly one hour.
+Outputs (data/results/): power_calibration.csv, power_ladder.csv,
+power_size.csv, power_curve.csv, power.json. --quick shrinks every count and
+suffixes outputs _quick. The full run takes a few core-hours.
 
 Usage:
-    uv run python -m klimafrac.analysis.power
-    uv run python -m klimafrac.analysis.power --reps 500 --size-reps 1000 --draws 20000
-    uv run python -m klimafrac.analysis.power --skip-size --designs NCT
-    uv run python -m klimafrac.analysis.power --quick --n-bct 386000 --n-nct 39901 \\
-        --n-mco2 59780 --target-width 0.30
+    uv run python -m klimafrac.analysis.power [--skip-size --designs NCT] [--quick]
 """
 
 import argparse

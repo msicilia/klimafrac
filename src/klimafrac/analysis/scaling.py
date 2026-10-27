@@ -1,29 +1,16 @@
 """
-Is there a scaling region? Diagnostics of the log-log fits behind every width.
+Diagnostics of the log-log fits behind every width.
 
-A width is read off the slopes of log F_q(s) on log s. The slopes mean
-something only if those points lie on a line over the scales used. For every
-window the paper analyses -- the hourly windows of the three groups of
-analysis/thin_benchmark.py, and the transaction-time windows of the ladder --
-this module refits each q and records how well a line describes it:
+For every window the paper analyses, the hourly windows of the groups of
+analysis/thin_benchmark.py and the transaction-time windows of the ladder,
+each q is refitted and the fit recorded: r2, the largest residual, and the
+slopes over the lower and the upper half of the scales, whose difference is
+a crossover. Fits are made for q from 0.5 to 5 (DIAG_QS) whatever the range
+in force; the width uses mfdfa.QS_POS.
 
-  r2          the fit's coefficient of determination
-  max_resid   the largest departure of log F_q(s) from the line
-  h_low,      the slope over the lower and the upper half of the scales; their
-  h_high      difference is a crossover, which a single slope averages away
-
-All of it at the paper's choices (s from 10 to N/10, 20 scales, linear
-detrending) and under the price paths.PRICE names. The fits are made for q
-from 0.5 to 5 whatever the paper's upper limit (DIAG_QS), so that the limit
-can be judged against what lies beyond it; the width and the "every fit good"
-filter use only the q grid in force (mfdfa.QS_POS).
-
-Outputs (via klimafrac.results):
-  data/results/scaling_windows.csv   one row per window and q
-  data/results/scaling_summary.csv   one row per clock, group and q
-  data/results/scaling.json          the numbers for the manuscript
-  figures/fig8_scaling.png           log F_q(s) for the window of median width
-                                     in each group, with the fitted lines
+Outputs (data/results/): scaling_windows.csv, scaling_summary.csv,
+scaling.json; figures/fig8_scaling.png, the window of median width in each
+group with its fitted lines.
 
 Usage:
     uv run python -m klimafrac.analysis.scaling

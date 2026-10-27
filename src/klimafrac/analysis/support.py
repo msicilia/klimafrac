@@ -1,39 +1,19 @@
 """
-Common support in staleness across the carbon tiers, in calendar time: the
-paper's paragraph on why the ladder is compared in transaction time. Figure
-fig4_support is drawn but not in the paper.
+Common support in staleness across BCT, NCT and MCO2 on the hourly clock:
+why the ladder is compared in transaction time.
 
-For BCT, NCT and MCO2 the cleaned trades of the estimation sample are put on
-an hourly grid (trades.calendar): each hour carries the last traded price
-and a no_trade flag set when the hour contains no trade. The hourly log
-returns are cut into consecutive non-overlapping windows of 4,000 hours, and
-in each window we record
-  no_trade    fraction of hours flagged no_trade, read from the trades
-              themselves rather than inferred from zero returns, which
-              would also count hours whose trades left the price unchanged
-  width_pos   positive-q spectrum width (trades.windows)
+The cleaned trades of the estimation sample are put on an hourly grid
+(trades.calendar) and cut into non-overlapping windows of 4,000 hours; each
+window records its no-trade fraction, read from the trades, and its
+positive-side width. Per token: minimum, median and maximum no-trade
+fraction, windows below 25%, and the correlation of width with no-trade
+fraction, also pooled.
 
-Windows do not overlap, as in every test in the paper, so each hour enters
-exactly one window. The diagnostic uses the window length of the inference
-it qualifies, which keeps it about the windows the comparisons would use;
-the cost is a small number of windows per token, which the counts report.
-
-Per token we report the minimum, median and maximum no-trade fraction, the
-number of windows below 25% no-trade, the Pearson correlation between width
-and no-trade fraction, and the same correlation with the three tokens pooled.
-
-Outputs:
-  data/results/support_windows.csv   one row per window
-  data/results/support_summary.csv   one row per token
-  data/results/support.json          cited numbers
-  figures/fig4_support.png           width against no-trade fraction
---quick restricts to the tokens named with --tokens and suffixes outputs
-with _quick; the figure is written only by a full run.
+Outputs (data/results/): support_windows.csv, support_summary.csv,
+support.json; figure fig4_support, not in the paper.
 
 Usage:
-    uv run python -m klimafrac.analysis.support
-    uv run python -m klimafrac.analysis.support --figure-only
-    uv run python -m klimafrac.analysis.support --quick --tokens NCT MCO2
+    uv run python -m klimafrac.analysis.support [--quick --tokens NCT MCO2]
 """
 
 import argparse

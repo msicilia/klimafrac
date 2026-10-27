@@ -1,74 +1,30 @@
 """
-Swap-level trade history, decoded from each pool's own events.
+Swap-level trade history, decoded from each pool's own events. One output
+row is one Swap event, in execution order (block, log_index).
 
-Every price in the paper starts here. One output row is one Swap event, and
-rows are ordered by (block, log_index), which is execution order.
+Three stages per pool, each resumable and pinned to END_BLOCK:
+  1. logs        every log the pair emitted over the window (Swap, Sync,
+                 Mint, Burn), read with eth_getLogs in ranges sized to the
+                 node's 10,000-log limit
+  2. transfers   the pair's ERC-20 transfers (alchemy_getAssetTransfers),
+                 which carry block timestamps and cross-check the amounts
+  3. build       Swap logs decoded, timed, reconciled and written
 
-Three stages per pool, each resumable and pinned to a fixed end block:
+Two checks. Along the reserve path, the change in reserves between
+consecutive Sync logs must equal the amounts of the event between them,
+which proves no log is missing (a burn may fall short by tokens sent to the
+pair directly, accepted only when the transfers account for it exactly).
+For a transaction holding one swap, the tokens that moved must equal the
+event's amounts (on Aerodrome the fee is added back first). A chunk written
+under other fetch parameters is refused rather than reused.
 
-  1. logs        every log the pair contract emitted over the window, read
-                 with eth_getLogs. Not only Swap: Sync carries the reserves
-                 after each trade, Mint and Burn the liquidity operations, so
-                 the whole history of the pool is captured once and never has
-                 to be fetched again. Ranges adapt to the node's 10,000-log
-                 response limit, aiming just under it.
-  2. transfers   a log carries no time, so block times come from the pair's
-                 ERC-20 transfers (alchemy_getAssetTransfers returns a
-                 timestamp per transfer and costs far less than one block call
-                 per block). The transfers are also evidence in their own
-                 right: every swap moves both tokens, so they cross-check the
-                 amounts and catch a missing log.
-  3. build       Swap logs are decoded, timed, reconciled against the reserve
-                 path, cross-checked against the transfers, and written.
-
-Two checks make the result verifiable rather than merely plausible:
-
-  reserve path   a constant-product pair emits Sync, carrying the reserves
-                 that result from an event, just before the Swap, Mint or
-                 Burn log of that event, so the change in reserves between
-                 consecutive Syncs must equal the amounts of the event between
-                 them. Walking the whole log stream that way proves that no
-                 Sync is missing anywhere in the window, which sampling
-                 cannot, and that every event between two Syncs is the one
-                 the reserves record. An event whose own log were missing
-                 beside its Sync would leave two Syncs with no event between
-                 them and reserves that moved; that case is counted
-                 (sync_with_reserve_change) and is zero in every pool.
-                 A burn is the one event that can legitimately fall short of
-                 the identity, because it pays out a share of tokens sent to
-                 the pair since the last Sync that it does not report; those
-                 are accepted only when the tokens' own transfers account for
-                 the reserve change exactly, and are counted.
-  transfers      for a transaction holding one swap, the tokens that moved
-                 must equal the event's amounts. On Aerodrome the fee leaves
-                 the pool during the swap, so the fee is added back before
-                 comparing; the fraction of swaps actually covered is recorded
-                 and a floor is enforced, because a check that silently covers
-                 nothing is worse than no check at all.
-
-Amounts come from the Swap event, which is what the pair booked. Where a pair
-already held surplus tokens -- a donation, or the remains of an earlier
-transaction -- it credits that surplus to the next swap, so the event can
-report a larger input than the transaction paid; `build` counts those.
-
-Output data/swaps_<chain>_<SYMBOL>.csv.gz:
-  block, tx_index, log_index   position in the chain: execution order
-  tx_hash, timestamp           transaction and the time of its block
-  base_amt, quote_amt          net amounts from the pool's side, decimal
-                               adjusted (+ = the pool received the token)
-  price                        |quote_amt| / |base_amt|, quote per base
-  side                         sell if the trader sold base to the pool
-  source                       always "log"
-  base_raw, quote_raw          the same net amounts as exact integers
-
-Under data/raw/<chain>/<SYMBOL>/: logs/ and transfers/ chunks, pool.json,
-params.json (the fetch parameters and code hash a chunk was written under; a
-chunk written under different parameters is refused rather than reused).
+Output data/swaps_<chain>_<SYMBOL>.csv.gz: block, tx_index, log_index,
+tx_hash, timestamp, base_amt and quote_amt (net amounts from the pool's
+side, decimal adjusted), price (quote per base), side, source, base_raw,
+quote_raw. Raw chunks under data/raw/<chain>/<SYMBOL>/.
 
 Usage:
-    uv run python -m klimafrac.fetch.swaps                    # every pool
-    uv run python -m klimafrac.fetch.swaps --pool polygon_NCT --jobs 4
-    uv run python -m klimafrac.fetch.swaps --estimate         # cost, no fetch
+    uv run python -m klimafrac.fetch.swaps [--pool polygon_NCT --jobs 4] [--estimate]
 """
 
 import argparse

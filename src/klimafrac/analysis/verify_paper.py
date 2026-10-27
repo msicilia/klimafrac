@@ -1,41 +1,20 @@
 """
-Check every quantitative claim in paper/paper_mdpi.tex against the pipeline's
-own output.
+Check every quantitative claim of the manuscript against data/results/.
 
 Each analysis module writes the numbers the manuscript cites to
-data/results/<module>.json under stable keys (klimafrac.results.numbers). This
-module holds the other half of that contract: a table of every number the
-manuscript asserts, where it appears, which result key it has to equal, and
-how close is close enough. Nothing here recomputes anything and nothing is
-read from a figure or a printed log, so a disagreement is a disagreement
-between the text and the pipeline, and cannot be a second implementation
-drifting from the first.
+data/results/<module>.json under stable keys (klimafrac.results.numbers).
+CLAIMS lists every number the manuscript asserts, where it appears, the key
+it must equal and the tolerance. A claim whose file or key is absent is
+reported MISSING, never skipped.
 
-The failure this is built to avoid is silent agreement. A claim whose result
-file or key is absent is reported MISSING rather than skipped, so a manuscript
-number that no analysis produces shows up as a gap in the pipeline instead of
-as a pass, and a renamed key fails loudly rather than quietly. Every row
-records the value the manuscript currently asserts, so after a refetch the
-list of disagreements is the edit list for the next draft.
-
-Comparison kinds:
-  int          exact integer equality
-  abs, rel     absolute or relative tolerance on a number
-  p            a p-value: within tolerance, and on the same side of 0.05
-  gt lt ge le  direction only, against the stated threshold
-  between      the computed value lies inside the stated interval
-  pair         a stored [lo, hi] matches the stated interval
-  bool, str    identity, or exact string; prefix for timestamps and dates
-  set          the same members, order ignored
-
-Result files hold their numbers under dotted keys, some as literal flat keys
-and some nested, so a key is resolved by trying the longest literal match at
-each level before descending.
+Comparison kinds: int (exact), abs and rel (tolerance), p (within tolerance
+and on the same side of 0.05), gt lt ge le (direction), between, pair (a
+stored [lo, hi]), bool and str (identity; prefix for dates), set (same
+members). A module name of the form <config>/<module> reads another
+configuration's results folder.
 
 Usage:
-    uv run python -m klimafrac.analysis.verify_paper
-    uv run python -m klimafrac.analysis.verify_paper --section 4.3
-    uv run python -m klimafrac.analysis.verify_paper --json
+    uv run python -m klimafrac.analysis.verify_paper [--section 4.3] [--json]
 """
 
 import argparse

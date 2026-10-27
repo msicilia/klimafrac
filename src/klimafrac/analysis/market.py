@@ -1,55 +1,24 @@
 """
-How large was each carbon tier's market? Table 1 (tab:tiers) and the
-magnitudes quoted beside it.
+Size of each carbon tier's market: Table 1 (tab:tiers) and the magnitudes
+quoted beside it.
 
-A swap is not a fixed quantity, so swap counts alone misstate how unequal
-these markets were. This module puts the cleaning, the dollar volume and the
-justification of the $0.10 threshold beside the counts. Trades come from
-trades.load and trades.clean over each pool's full data window; a quantity is
-restricted to the estimation sample or to a calendar year only where its name
-says so.
+From trades.load and trades.clean over each pool's full data window:
+  TIERS       raw and usable swaps, USD volume of the usable swaps, first and
+              last usable trade, median trade size, whether a stablecoin pair
+              exists (data/market_existence.csv), the share each cleaning
+              stage removes and the share the estimation sample keeps
+  YEARLY      raw swaps, usable swaps and USD volume by calendar year
+  THRESHOLDS  the checks behind the $0.10 floor, on NCT: price level and
+              dispersion by trade-size bucket, and lag-1 autocorrelation of
+              trade-to-trade returns as the floor falls
+Dollar values use trades.usd_value; the UBO and NBO legs are converted at
+the nearest cleaned KLIMA price.
 
-  TIERS       Table 1 (tab:tiers): raw and usable swaps, USD volume of the
-              usable swaps, first and last usable trade, median usable trade
-              size, and whether a stablecoin pair exists. Also the share of
-              raw swaps each cleaning stage removes, and the share of usable
-              swaps the estimation sample retains.
-  YEARLY      raw swaps, usable swaps and USD volume by calendar year, from
-              which the BCT 2021, best-year and 2025 comparisons are read.
-  THRESHOLDS  the two checks behind the $0.10 threshold, on NCT: price level
-              and dispersion by trade-size bucket, and lag-1 autocorrelation
-              of trade-to-trade log returns as the size threshold falls.
-
-Design choices
-  - Dollar value is trades.usd_value: |quote_amt| for USDC-quoted pools, and
-    for UBO and NBO the KLIMA leg at the nearest cleaned KLIMA price. Every
-    dollar figure, the UBO and NBO median trade size included, is over usable
-    swaps, as the Table 1 caption states.
-  - Cleaning shares follow the order in which trades.clean applies its
-    filters and are all shares of raw swaps, so the two stages add up to the
-    total. The size stage also drops swaps without a positive price; a swap
-    failing both size and deviation filters counts under size.
-  - Stable pair is read from data/market_existence.csv
-    (fetch/market_existence.py): one row per pair found on a factory, with
-    columns tier, quote and pool. A token has a stable pair if any row has a
-    stablecoin quote and a pool address. Without the file the column is left
-    out; with a different schema the module stops.
-  - Price by size bucket uses NCT swaps in 2025, the year the paper names,
-    with a positive price and the MIN_BASE floor but no deviation filter, so
-    the comparison is not shaped by the filter it is meant to justify. Rows
-    with no filter at all are included beside it.
-  - Autocorrelation uses NCT over the full data window, where the deviation
-    filter is defined. At each threshold every other filter is as in
-    trades.clean, recomputed on the swaps surviving that threshold; "no
-    filter" is raw swaps with only a positive price, which a log return
-    requires. Rows restricted to 2025 after cleaning are included beside it.
-
-Outputs data/results/market_tiers.csv, market_yearly.csv,
-market_thresholds.csv and market.json.
+Outputs (data/results/): market_tiers.csv, market_yearly.csv,
+market_thresholds.csv, market.json.
 
 Usage:
-    uv run python -m klimafrac.analysis.market                 # every token
-    uv run python -m klimafrac.analysis.market --token NCT     # prints only
+    uv run python -m klimafrac.analysis.market [--token NCT]
 """
 
 import argparse

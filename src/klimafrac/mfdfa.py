@@ -1,32 +1,22 @@
 """
-Multifractal detrended fluctuation analysis (Kantelhardt et al. 2002).
-
-Every analysis imports the estimator from here, so there is one
-implementation to check. For a series x of length N:
+Multifractal detrended fluctuation analysis (Kantelhardt et al. 2002), the
+one implementation every analysis uses. For a series x of length N:
 
   profile   Y(k) = sum_{i<=k} (x_i - mean(x))
-  segments  2 * floor(N/s) non-overlapping segments of length s, scanned from
-            both ends; a polynomial trend of order 1 is removed in each and
+  segments  2 floor(N/s) non-overlapping segments of length s, scanned from
+            both ends; a polynomial of order 1 is removed in each and
             F^2(v, s) is the mean squared residual
   moments   F_q(s) = { mean_v [F^2(v,s)]^(q/2) }^(1/q),  q != 0
-  scaling   h(q) is the least-squares slope of log F_q(s) on log s over
-            20 log-spaced scales from s_min = 10 to s_max
+  scaling   h(q) is the least-squares slope of log F_q(s) on log s over 20
+            log-spaced scales from s_min = 10 to s_max
   spectrum  tau(q) = q h(q) - 1, alpha = d tau / d q, f = q alpha - tau
 
-Flat segments. Where every return inside a segment is identical -- in a
-calendar-time series of a thinly traded asset, a stretch with no trade -- the
-detrended residual is exactly zero. For q > 0 such a segment contributes an
-exact zero to the mean. For q < 0 its moment is infinite and F_q is undefined,
-so flat segments are excluded from the negative moments. They are detected
-exactly from the returns, not from the computed residual, which in floating
-point is round-off of order 1e-30 rather than zero; keeping those round-off
-values instead (`exclude_flat=False`) makes h(q < 0) a function of machine
-precision, and is available only to demonstrate that.
-
-Two q ranges:
-  QS      -5 to 5 in steps of 0.5, excluding 0
-  QS_POS  0.5 to paths.Q_MAX (3 unless KLIMAFRAC_QMAX says otherwise); the
-          positive-side width uses only these
+A segment whose returns are all identical has a residual of exactly zero;
+for q < 0 its moment is undefined, so such segments, detected from the
+returns, are excluded from the negative moments (exclude_flat=False keeps
+their floating-point residual instead). Two q grids: QS, -5 to 5 in steps
+of 0.5 without 0; QS_POS, 0.5 to paths.Q_MAX, used by the positive-side
+width.
 """
 
 import numpy as np

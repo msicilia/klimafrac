@@ -1,49 +1,23 @@
 """
-How large each token's asset is, from outside the chain.
+Each token's asset size, from outside the chain.
 
-A pool's idleness is read from the chain. Whether its token is a large asset
-traded mostly elsewhere or a small one is not on the chain at all, and
-analysis/size.py needs it. Two public sources supply it.
+Measure: the asset's rank in CoinMarketCap's historical ranking of SNAPSHOT
+(2021-10-03, the last weekly snapshot before the first hourly series), read
+from the listing feed behind https://coinmarketcap.com/historical/20211003/.
+The ranking of CHECK_SNAPSHOT (2022-02-13) is kept as a check. A token is
+tied to a ranked asset by contract, never by name: among the ranked assets
+with the token's symbol, the one whose record lists the token's Polygon
+address, or else the Ethereum address Polygon's bridge maps it to
+(RootChainManager.childToRootToken). WETH, WBTC and WPOL take the rank of
+the coin they wrap (UNDERLYING); KNOWN_MISMATCH records a contract the
+ranking's record misplaces, for a sensitivity. Late check: CoinGecko's
+market value at LATE_DATE, the last day of the estimation sample. Responses
+are stored under data/raw/token_size/ and never requested twice.
 
-Snapshot (the measure). CoinMarketCap's historical ranking of SNAPSHOT, the
-last weekly snapshot before the first hourly series begins (2021-10-08), so
-that size is measured before the trading it is set against
-(https://coinmarketcap.com/historical/20211003/), read from the listing feed
-behind that page. The ranking of CHECK_SNAPSHOT, the first weekly snapshot
-after the date by which the candidate pools had to exist, four months into
-the sample, is kept as a check (`check_rank`). A token is tied to a ranked
-asset by its contract and never by its name: the candidates are the ranked assets carrying the token's
-on-chain symbol, and the one kept is the one whose record lists the token's
-Polygon address, or else the Ethereum address that Polygon's own bridge names
-as the token's origin (RootChainManager.childToRootToken, read on Ethereum).
-The second route covers bridged copies of ranked assets whose records list
-only the Ethereum contract. A token with no such asset is unlisted. Three tokens wrap a coin that has no
-contract of its own -- WETH, WBTC and WPOL -- and take the rank of the coin
-they wrap (UNDERLYING).
-
-Late check. CoinGecko's public interface, which resolves a Polygon contract
-address directly, at LATE_DATE, the last day of the estimation sample. It
-serves only the past year without a paid plan, so it cannot supply the
-snapshot; and a size measured after the trading it is set against is partly a
-result of that trading. It is here to check the measure, not to be it.
-
-Every response is stored as received under data/raw/token_size/, and a stored
-response is never requested again, so the table can be rebuilt offline.
-
-Output data/token_size.csv, one row per pool token:
-  token, pool, base, role
-  cmc_id, cmc_name, candidates     the ranked asset matched, and how many shared the symbol
-  matched_by                       "address", "bridge", "underlying" or "" (unlisted)
-  bridged_from                     the Ethereum token the bridge maps it to, if any
-  snapshot_rank, snapshot_volume,  rank, worldwide 24-hour volume in dollars,
-  snapshot_market_cap,             market value where the ranking states one,
-  snapshot_markets                 and number of markets, on SNAPSHOT
-  snapshot_rank_filled             the rank, or one past the last ranked asset if unlisted
-  check_rank, check_volume,        the same on CHECK_SNAPSHOT
-  check_market_cap, check_rank_filled
-  sensitivity_id, sensitivity_rank the asset in KNOWN_MISMATCH and its rank on SNAPSHOT
-  late_id, late_market_cap,        the second source's asset and its figures
-  late_volume                      on LATE_DATE
+Output data/token_size.csv, one row per pool token: the matched asset and
+how it was matched, rank, volume, market value and markets on SNAPSHOT and
+CHECK_SNAPSHOT, the filled ranks, the sensitivity asset and the late
+figures.
 
 Usage:
     uv run python -m klimafrac.fetch.token_size

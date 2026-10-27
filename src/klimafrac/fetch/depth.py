@@ -1,33 +1,15 @@
 """
-DefiLlama's protocol records for Toucan and KlimaDAO, snapshotted to disk.
+DefiLlama's protocol records for Toucan and KlimaDAO, stored verbatim.
 
-Sources, each stored verbatim because DefiLlama rewrites this history:
-  https://api.llama.fi/protocol/toucan-protocol   pool value locked
-  https://api.llama.fi/protocol/klimadao          KlimaDAO's own TVL history
+Sources https://api.llama.fi/protocol/toucan-protocol and
+https://api.llama.fi/protocol/klimadao. Only the Toucan USD value of carbon
+locked is used, as a comparison column; tonnes come from the chain
+(fetch/inventory.py) and pool value from reserves (fetch/reserves.py).
+Window: vendor dates before 2026-07-26.
 
-The Toucan record is the only source here for the USD value of carbon locked
-in the Toucan pools, kept as a labelled comparison column. Tonnes are NOT
-taken from it; inventory in tonnes comes from on-chain totalSupply() in
-fetch/inventory.py, and the pool value is reconstructed from pool
-reserves in fetch/reserves.py. The KlimaDAO record is stored for reference
-and nothing is derived from it.
-
-`tokensInUsd` and `tokens` are daily, keyed by token symbol, both summed over
-chains (top level) and per chain (chainTvls). Toucan pools only: MCO2, KLIMA,
-UBO and NBO have no entry.
-
-Pinned window: vendor dates before 2026-07-26 (UTC). A date carrying more than
-one point keeps the last.
-
-Outputs:
-  data/depth.csv  date, chain ("all" or a chainTvls key), token, usd, tonnes;
-                  exactly as the vendor reports, uncleaned
-Raw: data/raw/defillama/protocol_<name>/<retrieved>/response.json,
-     manifest.json and, for Toucan, usd_mask.json
-
-`load_depth()` reads a stored snapshot and never touches the network. Its
-`clean=True` option applies two masks derived from the snapshot itself (see
-`usd_mask` and `_drop_glitches`), never a date typed in.
+Outputs: data/depth.csv (date, chain, token, usd, tonnes, as reported).
+Raw under data/raw/defillama/protocol_<name>/<retrieved>/. `load_depth()`
+reads a stored snapshot; `clean=True` applies the masks derived from it.
 
 Usage:
     uv run python -m klimafrac.fetch.depth [--refresh | --snapshot YYYY-MM-DD]

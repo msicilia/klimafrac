@@ -1,75 +1,25 @@
 """
 Calendar-time estimates on the reconstructed pools and on the aggregator's
-series, and how stale the aggregator's series is against the trades: the
-paper's Tables tab:daily and tab:hourly and the aggregator staleness cited
-in its data section. Figures fig1_staleness and fig2_hq are drawn but not in
-the paper.
+series: the paper's Tables tab:daily and tab:hourly and the aggregator
+staleness of its data section.
 
-Series. For each token the pool's cleaned trades in the estimation sample
-(trades.trades) are put on a daily and an hourly grid (trades.calendar): from
-the interval of the pool's first trade to the last interval before
-trades.SAMPLE_END, last price carried forward, `no_trade` observed from the
-trades. The aggregator series (DefiLlama, fetch/daily_prices.py and
-fetch/hourly_prices.py) is placed on the same grid, so both panels of each
-table cover the same window per token. The vendor series are only the object
-of this comparison; nothing about the pools is estimated from them.
+For each carbon token the cleaned trades of the estimation sample are put on
+a daily and an hourly grid (trades.calendar: last price carried forward,
+no_trade observed from the trades), and the DefiLlama series is placed on
+the same grid, a vendor bar at instant t being the price at t. Widths: the
+full range, q in [-5, 5] (daily s_max = N/4, hourly N/10; flat segments
+excluded from the negative moments, the *_ro columns keep them), and the
+positive side, each against 1,000 shuffled and 1,000 phase-randomised
+surrogates (mfdfa.surrogate_null). Vendor staleness compares, hour by hour,
+the hours with a zero vendor return with the hours in which the pool did
+not trade.
 
-Vendor alignment. A vendor bar at instant t is the price at t, so the close
-of the pool interval [t, t + step) is the vendor value at t + step, and the
-vendor return into interval t is log v(t + step) - log v(t). It is defined
-only where both bars exist; the vendor series has missing bars and nothing is
-carried across them, because filling would manufacture exactly the zero
-returns being measured. The MFDFA series of a vendor panel is its defined
-returns in time order. The staleness table also reports the conditional
-movement share with the unshifted convention log v(t) - log v(t - step), to
-show that the conclusion does not depend on the half-step ambiguity of the
-vendor's +/- 30 min search window.
-
-Estimators (mfdfa.py, s_min = 10):
-  full range   q in [-5, 5]; daily s_max = N/4 as in Table tab:daily, hourly
-               s_max = N/10. Flat segments are excluded from the negative
-               moments (the corrected estimator). The same fit with
-               exclude_flat=False is reported in *_ro columns: it keeps the
-               ~1e-30 floating-point residual of flat segments, so its
-               negative branch depends on machine precision.
-  positive q   q in [0.5, 5], s_max = N/10 at both frequencies.
-
-Surrogates. Every width -- full range and positive side, daily and hourly,
-both sources -- is set against 1,000 shuffled and 1,000 phase-randomised
-surrogates of identical length. The draws are exactly those of
-mfdfa.surrogate_null(x, s_max_div, n, seed); each draw is evaluated with
-both full_spectrum and positive_spectrum, so the two widths share a null.
-The seed is crc32 of "<freq>/<source>/<token>", so a series' null does not
-depend on which other series are run or in what order.
-
-Vendor staleness (hourly, on each pool's grid):
-  vendor_zero_pct            hours with a defined vendor return whose change
-                             is exactly zero, over hours with a defined
-                             vendor return
-  matched_no_trade_pct       pool no-trade hours over the same hours
-  understatement_ratio       matched_no_trade_pct / vendor_zero_pct
-  vendor_moves_given_no_trade_pct
-                             no-trade hours with a defined, nonzero vendor
-                             change, over no-trade hours with a defined
-                             vendor return: the share of true inactivity the
-                             vendor conceals hour by hour
-  staleness_deficit_pct      1 - vendor zero hours / matched no-trade hours:
-                             the share of inactivity missing from the vendor's
-                             count, whichever hours it falls in
-The "all" row pools the counts of the four tokens.
-
-Outputs (suffix _quick with --quick):
-  data/results/calendar_daily.csv            Table tab:daily and the daily
-                                             columns of tab:hourly
-  data/results/calendar_hourly.csv           Table tab:hourly, the hourly
-                                             full-range widths
-  data/results/calendar_vendor_staleness.csv aggregator staleness
-  data/results/calendar.json                 cited numbers
-  figures/fig1_staleness.png, figures/fig2_hq.png
+Outputs (data/results/): calendar_daily.csv, calendar_hourly.csv,
+calendar_vendor_staleness.csv, calendar.json; figures fig1_staleness and
+fig2_hq, not in the paper. --quick suffixes outputs _quick.
 
 Usage:
-    uv run python -m klimafrac.analysis.calendar
-    uv run python -m klimafrac.analysis.calendar --quick --tokens NCT MCO2
+    uv run python -m klimafrac.analysis.calendar [--quick --tokens NCT MCO2]
 """
 
 import argparse

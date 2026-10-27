@@ -1,56 +1,23 @@
 """
-Thin pool or small asset? Width against idleness and against the asset's size.
+Width against pool idleness and against the asset's size, across the
+conventional tokens of analysis/thin_benchmark.py.
 
-analysis/thin_benchmark.py finds thin conventional tokens wider than busy
-ones, but the narrowest busy pools hold the largest assets, so a pool's
-idleness and its asset's size are entangled there. This module sets the two
-side by side. Idleness is a property of the pool: the share of hours with no
-trade. Size is a property of the asset wherever it trades, and is read from
-outside the chain by fetch/token_size.py.
+Idleness is a token's share of hours with no trade. Size is the asset's
+rank by market value on 3 October 2021 (fetch/token_size.py), a larger rank
+being a smaller asset; unlisted tokens take the rank after the last ranked
+asset, tied, and the wrapped coins the rank of the coin they wrap. The
+carbon tokens are reported but enter no test.
 
-Plan, fixed before any token's size was set against its width.
+Across tokens, on ranks: the Spearman correlations of width with idleness
+and with smallness, each partial on the other, with permutation p-values on
+the residuals. Checks repeat the test with one thing changed: size by
+24-hour volume; the ranking of 13 February 2022; market value at the end of
+the estimation sample from a second source; listed tokens only; WETH
+counted once; TEL recoded as the asset its contract resolves to. Median
+width is also given in the four cells of thin or busy pool by asset ranked
+in the first hundred or not.
 
-  Tokens. The conventional tokens of thin_benchmark: thin, deep and active.
-  The carbon tokens are reported beside them and enter no test.
-
-  Size. The asset's rank by market value in the public ranking of 3 October
-  2021, the last weekly snapshot before the first hourly series begins, so
-  that size is measured before the trading it is set against. A larger rank
-  number is a smaller asset. A token matched to no ranked asset takes the
-  rank after the last ranked one, all such tokens tied. WETH, WBTC and WPOL
-  take the rank of the coin they wrap.
-
-  Test. No cut-off divides large from small. On ranks, across tokens:
-    rho(width, idleness)            and its partial holding size fixed
-    rho(width, smallness)           and its partial holding idleness fixed
-    rho(idleness, smallness)        how entangled the two are
-  Partials are correlations of rank residuals; p-values come from permuting
-  the residuals of the variable of interest, two-sided.
-
-  Checks, each repeating the test with one thing changed:
-    volume      size by rank of worldwide 24-hour volume in the same ranking
-    check       size by rank in the ranking of 13 February 2022, the first
-                snapshot after the date by which the candidate pools had to
-                exist, four months into the sample
-    late        size by market value on the last day of the estimation
-                sample, from a second, documented source; later than the
-                trading it is set against, so a check and not the measure.
-                A token the source does not value counts as the smallest.
-    listed      only tokens matched to a ranked asset
-    weth_once   without the second WETH pool
-    mismatch_recoded
-                tokens whose ranked asset the ranking's record misplaces
-                (fetch/token_size.KNOWN_MISMATCH) coded as that asset; one
-                token, TEL. A sensitivity, not part of the plan
-
-  Description. Median width in the four cells of thin or busy pool by asset
-  ranked in the first hundred or not. The cut is the conventional one and
-  carries no test.
-
-Outputs (via klimafrac.results):
-  data/results/size_tokens.csv   one row per token: group, idleness, width, sizes
-  data/results/size_tests.csv    one row per variant
-  data/results/size.json         the numbers for the manuscript
+Outputs (data/results/): size_tokens.csv, size_tests.csv, size.json.
 
 Usage:
     uv run python -m klimafrac.analysis.size

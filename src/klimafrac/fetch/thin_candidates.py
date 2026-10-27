@@ -1,80 +1,33 @@
 """
-Census of candidate pools for a conventional benchmark as thin as the carbon pools.
+Census and selection of the conventional benchmark pools, from the chain
+alone.
 
-The asset-class comparison sets the carbon tokens against WETH and WBTC, the
-most active pools on the same two exchanges, so it cannot tell a carbon effect
-from a thin-market effect. This module lists the pools from which a matched
-benchmark can be drawn, using nothing but the chain and nothing about their
-price dynamics, so the choice cannot be tuned to a result.
+Universe: every constant-product pair the Sushiswap and Quickswap factories
+on Polygon created against USDC.e, from their PairCreated logs. Screen:
+getReserves() at three anchor instants (ANCHORS) for every pair created
+before the first. Yardstick: for the pairs that pass, getReserves() at the
+last block before 00:00 UTC on every fifth day of the estimation sample,
+giving the quote reserve and blockTimestampLast; the share of readings at
+which the pair had been idle for more than an hour estimates its share of
+hours with no trade.
 
-Universe. Every constant-product pair that the Sushiswap and Quickswap
-factories on Polygon ever created against USDC.e -- the quote of every pool
-already analysed -- read from the factories' PairCreated logs up to END_BLOCK.
-Factories never remove pairs, so the list is complete.
+Thin rule, each range being the one the four USDC.e-quoted carbon pools
+span on the same readings: idle share within their range; share idle for
+more than a day not above their largest; price not pegged (moved by at
+least PEG_RANGE); one pool per token, the deeper; median quote reserve
+within their range; swap history buildable (UNBUILDABLE lists the one
+exception). Active rule: idle share below the carbon pools' range, no depth
+constraint, the other criteria unchanged. `select` fails unless
+fetch/pools.py registers exactly the pools the rules keep. `verify` checks
+the fetched logs of each registered pool against the readings: the
+reserves in the last Sync at or before each reading's block must equal
+getReserves() there.
 
-Screen. A pair can supply the same windows as the carbon pools only if it
-existed when the last of them started trading and still held reserves when
-the estimation sample ends. getReserves() is therefore read at three anchor
-instants (ANCHORS) for every pair created before the first one.
-
-Yardstick. For the pairs that pass, getReserves() is read at the last block
-before 00:00 UTC on every fifth day of the estimation sample, the boundary
-fetch/reserves.py uses daily for the pools already analysed. Each reading carries the quote reserve
-(depth) and blockTimestampLast, the time of the pair's last swap, mint, burn
-or sync. The share of readings at which that is more than an hour old
-estimates the share of hours with no trade: read daily on the seven pools
-whose swaps are known, it lands within a few points of the exact figure.
-
-Rule. A candidate is kept when it is as thin as the carbon pools on every
-measure, each range being the one the four carbon pools quoted in USDC.e
-(BCT, NCT, MCO2, KLIMA) span on the same readings:
-  1. the share of readings idle for more than an hour lies in their range;
-  2. the share idle for more than a day does not exceed their largest;
-  3. its price is not pegged: the pool price moved by at least PEG_RANGE
-     between its lowest and highest reading (stablecoins move by less than
-     1.7, the next candidate by 2.9, WETH by 4.5);
-  4. one pool per token, the one with the larger median quote reserve;
-  5. its median quote reserve lies in the carbon pools' range;
-  6. its swap history can be built. One pool that meets the other five cannot
-     (UNBUILDABLE): the transfer index fetch/swaps.py takes block times from
-     omits a block in which the pair swapped, so the history fails the
-     fetcher's completeness check. It was set aside before any of these
-     pools was analysed.
-The pools kept are registered in fetch/pools.py with role "thin", and `select`
-fails unless that registry is exactly the rule's output.
-
-Active pools. The same readings give the mirror image, a benchmark of pools
-that trade more often than any carbon pool: the share of readings idle for
-more than an hour lies below the carbon pools' range, and criteria 2, 3, 4
-and 6 apply unchanged. Depth is not constrained, since idleness is what the
-groups are matched or contrasted on. These pools are registered with role
-"active" under the same check. The rule was added after the thin pools had
-been analysed and before any active pool was.
-
-Verification. Once a registered pool's logs are fetched, `verify` sets them
-against the readings above, which came from a different method: the reserves
-in the last Sync log at or before each reading's block must equal what
-getReserves() returned at that block, to the unit. Agreement shows the logs
-belong to that pair and reproduce its state at about three hundred points
-spread over the sample.
-
-Outputs:
-  data/thin_candidates_pairs.csv     every USDC.e pair, with its creation block
-  data/thin_candidates_screen.csv    anchor readings for pairs old enough
-  data/thin_candidates_daily.csv     depth and idleness of pairs that pass
-  data/thin_candidates_measures.csv  one row per pair that passes, with each
-                                     measure and each criterion of the rule
-  data/thin_candidates_selected.csv  the pools the rule keeps
-  data/thin_candidates_active.csv    the pools the mirror rule keeps
-  data/thin_candidates_verified.csv  logs against readings, per fetched pool
-Raw: data/raw/thin_candidates/
+Outputs: data/thin_candidates_{pairs,screen,daily,measures,selected,
+active,verified}.csv. Raw under data/raw/thin_candidates/.
 
 Usage:
-    uv run python -m klimafrac.fetch.thin_candidates --stage pairs
-    uv run python -m klimafrac.fetch.thin_candidates --stage screen
-    uv run python -m klimafrac.fetch.thin_candidates --stage daily
-    uv run python -m klimafrac.fetch.thin_candidates --stage select
-    uv run python -m klimafrac.fetch.thin_candidates --stage verify
+    uv run python -m klimafrac.fetch.thin_candidates --stage {pairs,screen,daily,select,verify}
 """
 
 import argparse

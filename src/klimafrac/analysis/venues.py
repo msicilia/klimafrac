@@ -1,120 +1,23 @@
 """
-One asset on two venues: what venue microstructure does to the positive-q
-spectrum, and whether a comparison of this kind can detect it. Not used in
-the paper.
+One asset on two venues: BCT on Sushiswap (Polygon) against Aerodrome
+(Base) over their overlap, and WETH on Sushiswap against Quickswap. Not
+used in the paper.
 
-Every estimate uses the estimation sample (trades.trades: cleaned, before
-SAMPLE_END) unless a row is labelled otherwise. Two designs hold the asset
-fixed and change only the venue:
-  BCT    Sushiswap on Polygon against the Aerodrome volatile pool on Base,
-         over the calendar overlap of the two pools
-  WETH   WETH/USDC.e on Sushiswap against Quickswap, both on Polygon, over
-         the whole estimation sample
-Gaps are always the second venue minus the first (Base - Polygon, Quickswap
-- Sushiswap) and the asset gap is NCT - BCT, as medians of window widths
-tested with stats.permutation_test.
+Reports the round-trip cost from price reversals between consecutive trades
+and the fee it implies; the agreement of daily prices across the two BCT
+venues; venue and asset gaps in the positive-side width on windows of 2,000
+(BCT) and 4,000 (WETH) returns, raw and prewhitened by a per-window AR(1);
+the WETH gap by year and on the hourly clock; and the size and power of the
+permutation test by smoothed bootstrap within groups and by simulation on
+multifractal random walks.
 
-Round-trip cost. For consecutive cleaned trades in execution order, a
-reversal is a trade whose side differs from the previous trade's. The median
-|log return| over reversals is the round trip; over same-side pairs it is the
-same-side move. On a constant-product pool quoted gross of fee, a reversal
-at unchanged reserves traverses the fee twice, so the round trip is
--2 log(1 - fee) plus impact and any intervening price change, and the implied
-fee is 1 - exp(-round_trip / 2). Both BCT venues are measured over the SAME
-overlap window; full estimation-sample rows are labelled separately. Size
-rules restrict pairs by the dollar value of both trades (the smaller of the
-two at least a floor, or the larger below a ceiling), which is what "stable
-across restrictions on trade size" is checked against. Rows are also given
-per calendar year, and per quarter for the two BCT pools, because the
-Aerodrome fee is not constant over the overlap. Only V2 fees are declared
-here (0.30%); for Aerodrome the table reports what the estimator shows.
-
-Same asset. Daily median prices of the two BCT venues over the overlap:
-number of common days, correlation of price levels, correlation of daily log
-changes (levels share a trend and correlate regardless), and the median
-absolute log gap.
-
-BCT venue and asset effects. Windows are 2,000 trade-to-trade returns rather
-than trades.WINDOW = 4,000: the Base pool's usable returns over the overlap
-give only a handful of 4,000-return windows (the count is recorded), and
-2,000 is the shortest length that keeps s_max = 200 and the 20-scale grid of
-mfdfa meaningful. The asset gap uses the same 2,000-return windows on each
-token's estimation sample, so both gaps share one yardstick and one sample
-rule; the asset gap over the overlap only is given as context.
-
-Prewhitening. The AR(1) coefficient is the lag-1 autocorrelation estimated
-inside each window, and the window's residuals r_t - phi r_(t-1) (using the
-return before the window where there is one) replace its returns. Estimating
-phi per window matters because bid-ask bounce on an AMM depends on the trade
-mix, which drifts over years; a single coefficient would leave dependence in
-the periods where it differs. Windows keep their raw boundaries, so raw and
-prewhitened widths are paired. A full-series coefficient is also reported.
-
-WETH. Windows of 4,000 returns; the pooled gap raw and prewhitened; the gap
-per calendar year, a window belonging to the year of its calendar midpoint;
-dispersion of window widths per venue (min, max, quartiles, IQR -- min and
-max grow with the number of windows, so IQR is the comparable spread); and
-the same comparison on the hourly clock (trades.calendar, last price carried
-forward, windows of 4,000 hours) with its own permutation test. Minimum
-activity is swaps per hour of calendar time within each calendar month, ISO
-week and day of the estimation sample, the first and last periods counting
-only the hours they cover; the minimum over months and over weeks, and the
-longest interval without a swap, are reported.
-
-Power. One method for both designs. Each group's window widths are centred
-on the group's own median and resampled with replacement within the group;
-a known shift is added to the second group and the permutation test is
-applied, POWER_DRAWS draws per replication (a p-value only needs resolving
-around 0.05 there). Resampling each group from its own centred widths, not
-from the pooled widths, keeps the observed gap out of the null dispersion.
-The bootstrap is smoothed: each draw gets Gaussian jitter at Silverman's
-bandwidth, and the values are shifted so the jittered distribution has
-median zero. Without it a group of a few windows is resampled from a few
-distinct values, the resampled medians sit on those values rather than on
-zero, and the test rejects a true equality several times too often for
-that reason alone. Size is therefore measured, not assumed: the rejection
-rate at zero shift is reported, and next to nominal power is size-adjusted
-power, rejecting at the largest p threshold whose zero-shift rejection rate
-is at most 5%. Where nominal size is far from 5%, only the adjusted figure
-is a power.
-For WETH a second variant centres and resamples within venue x calendar
-year, keeping each year's window count: the venue gap changes by year, so
-centring on one median per venue leaves that variation inside each group's
-dispersion, while the within-year variant measures dispersion net of it.
-The shift ladder is a fixed grid together with multiples of the observed BCT
-raw venue gap, so the ladder brackets it whatever its value. Size is the
-rejection rate at zero shift. To separate the estimator's dispersion from
-the number of windows, the WETH widths are also resampled at BCT's window
-counts and at four times WETH's, and BCT's at WETH's; windows are treated as
-independent, which is what the permutation test assumes too. As a cross-check
-with no resampling, the same test is simulated on multifractal random walks
-(synthetic.mrw) at the designs' window lengths and counts: lambda2 of the
-first group is calibrated so the simulated median window width matches the
-observed one, and the second group's lambda2 so the calibrated width is
-larger by each shift; the realised gap is reported next to the target
-because MRW dispersion changes with lambda2 and the width curve saturates.
-The minimum detectable effect is the shift at which interpolated power first
-reaches 80%.
-
-Outputs (via klimafrac.results):
-  data/results/venues_roundtrip.csv     round trip and same-side move per pool,
-                                        sample, size rule and period
-  data/results/venues_bct_windows.csv   every 2,000-return window of the BCT design
-  data/results/venues_weth_windows.csv  every WETH window, trade and hourly clock
-  data/results/venues_weth_year.csv     WETH gap by calendar year, raw and prewhitened
-  data/results/venues_comparisons.csv   every pooled test of both designs
-  data/results/venues_weth_activity.csv swaps per hour per month, week and day
-  data/results/venues_power.csv         size and power, bootstrap and MRW
-  data/results/venues.json              every number the paper cites
---quick cuts draws and replications and suffixes every output _quick; a run
-restricted with --sections suffixes them _partial, so neither replaces the
-paper outputs.
+Outputs (data/results/): venues_roundtrip.csv, venues_bct_windows.csv,
+venues_weth_windows.csv, venues_weth_year.csv, venues_comparisons.csv,
+venues_weth_activity.csv, venues_power.csv, venues.json. --quick and
+--sections suffix the outputs _quick and _partial.
 
 Usage:
-    uv run python -m klimafrac.analysis.venues
-    uv run python -m klimafrac.analysis.venues --power-reps 500 --mrw-reps 200 --jobs 8
-    uv run python -m klimafrac.analysis.venues --sections roundtrip bct
-    uv run python -m klimafrac.analysis.venues --quick
+    uv run python -m klimafrac.analysis.venues [--sections roundtrip bct] [--quick]
 """
 
 import argparse

@@ -1,76 +1,27 @@
 """
-Transaction-time comparison of the carbon pool tiers: NCT against BCT and
-MCO2 against BCT: the paper's section within the quality ladder and its
-Table tab:robust.
+Transaction-time comparison within the quality ladder, NCT vs BCT and
+MCO2 vs BCT: the paper's ladder section and Table tab:robust.
 
-Main comparison. Each token's cleaned trades in the estimation sample
-(trades.trades) give trade-to-trade log returns (trades.returns, first trade
-dropped). These are cut into consecutive non-overlapping windows of 4,000
-returns and the positive-q width is estimated in each (trades.windows). A
-comparison is the difference of window medians, other minus BCT, tested with
-stats.permutation_test. BCT on Sushiswap is the base; NCT trades on the same
-Sushiswap venue, MCO2 on Quickswap, so only NCT vs BCT holds venue fixed.
+Each token's cleaned trades in the estimation sample give trade-to-trade
+log returns, cut into non-overlapping windows of 4,000 returns with the
+positive-side width of each (trades.windows). A comparison is the
+difference of median window widths, other minus BCT, tested with
+stats.permutation_test. Per window: calendar span, dollar value, median
+trade size and trades per day. Calendar matching keeps the windows whose
+span intersects a window of the other group. A pooled regression of width
+on token dummies, log intensity and log trade size uses HC3 errors.
 
-What a window covers. A window's trades are the 4,000 trades that end its
-returns, and its calendar span runs from the first of those to the last.
-For each window we record
-  span_days        calendar span
-  usd_total        dollar value traded (sum of trades.usd_value)
-  usd_median       median trade size in dollars
-  intensity        trades per day, 4,000 / span_days
-and summarise them per token: median span and dollar value, how many
-windows begin in 2021, and the overlap in trade intensity, i.e. how many
-windows of each group lie inside the intensity range the two groups share.
+Robustness reruns both comparisons on the full data window, to 2026-01-01
+and 2026-04-01, on swaps alone in their block, with the first return filled
+with zero, and over the 32 cleaning settings (dollar floor {0, 0.10, 1, 10},
+base floor {0, 1e-4}, median filter {2, 3, 5, off}).
 
-Calendar matching. A window is kept if its own [t_start, t_end] intersects
-at least one window of the other group, and the test is rerun on the kept
-windows. Matching against individual windows rather than against the other
-group's overall range matters: NCT's windows run from 2022 to 2026, so
-nearly every BCT window lies inside NCT's overall range while few of them
-coincide with an NCT window.
-
-Conditioning. Window width is regressed on NCT and MCO2 dummies (BCT the
-omitted category), log trade intensity (natural log of trades per day) and
-log median trade size (natural log of dollars), windows of the three tokens
-pooled, with HC3 standard errors. Non-overlapping windows need no
-autocorrelation correction; HC3 guards against the unequal group sizes.
-
-Robustness (Table tab:robust). Each specification reruns both comparisons:
-  estimation sample   the specification above
-  full data window    cleaned trades without the SAMPLE_END restriction
-  to 2026-01-01,      the sample cut at the end of the last complete calendar
-  to 2026-04-01       year and quarter before SAMPLE_END, the mechanical
-                      endpoints of analysis/thin_robustness.py
-  isolated trades     only swaps that are alone in their block, with returns
-                      recomputed on the price path of the isolated trades.
-                      Block membership is read from every swap of the pool
-                      before cleaning, because whether a block held another
-                      swap is a fact about the chain, not about the filter.
-                      The share of cleaned trades removed is reported.
-  fill first return   the undefined first return set to zero instead of
-                      dropped, which shifts every window boundary by one
-  cleaning grid       MIN_USD in {0, 0.10, 1, 10}, MIN_BASE in {0, 1e-4},
-                      MAX_DEVIATION in {2, 3, 5, off}; 32 combinations, each
-                      applied to the full data window before the estimation
-                      sample is taken, exactly as trades.clean is. The range
-                      of BCT's median window width across the grid is the
-                      instability of the level that the paper reports.
-Every specification, the main one included, is cleaned by trades.clean.
-
-Outputs (via klimafrac.results):
-  data/results/tiers_windows.csv       every window of every specification
-  data/results/tiers_comparisons.csv   gap, p and window counts per test
-  data/results/tiers_support.csv       per-token window coverage summary
-  data/results/tiers_regression.csv    conditioning regression
-  data/results/tiers_cleaning.csv      the cleaning grid
-  data/results/tiers.json              every number the paper cites
---quick uses 999 permutation draws and three grid points and writes the
-same files with a _quick suffix, so a test run never replaces paper outputs.
+Outputs (data/results/): tiers_windows.csv, tiers_comparisons.csv,
+tiers_support.csv, tiers_regression.csv, tiers_cleaning.csv, tiers.json.
+--quick uses 999 draws and three grid points with the _quick suffix.
 
 Usage:
-    uv run python -m klimafrac.analysis.tiers
-    uv run python -m klimafrac.analysis.tiers --draws 20000 --no-grid
-    uv run python -m klimafrac.analysis.tiers --quick
+    uv run python -m klimafrac.analysis.tiers [--draws 20000 --no-grid] [--quick]
 """
 
 import argparse

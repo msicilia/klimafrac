@@ -1,94 +1,29 @@
 """
-Calibration of the staleness bias: what carrying the last price forward does
-to the estimated singularity spectrum when the generating process is known
-and held fixed: the paper's Tables tab:bias and tab:informativeness and the
-staleness threshold of its measurement practices. Figure fig3_staleness_bias
-is drawn but not in the paper.
+Calibration of the staleness bias on a multifractal random walk whose
+process is known and held fixed: the paper's Tables tab:bias and
+tab:informativeness and the staleness threshold of its practices.
 
-Process. Increments of a multifractal random walk (synthetic.mrw) with
-intermittency lambda2 and integral scale synthetic.INTEGRAL_SCALE, fixed
-across series lengths so that every N is a draw from the same process, on
-the grid lambda2 in {0.05, 0.10, 0.15} with base 0.10. Its true spectrum
-gives h(q) = 1/2 + lambda2 - lambda2 q / 2, so the positive-q width has a
-known target.
+Increments of synthetic.mrw with lambda2 in {0.05, 0.10, 0.15} (base 0.10),
+whose spectrum has h(q) = 1/2 + lambda2 - lambda2 q / 2, are sampled as a
+thin market records them: an untraded interval returns zero and the next
+traded one the change accumulated since. Inactivity at no-trade fraction p
+is i.i.d. or a two-state Markov chain with mean quiet run L (markov<L>).
+Estimators at s_min = 10, s_max = N/10: the full-range width (flat segments
+excluded from the negative moments; width_ro keeps them), the positive-side
+width and h(-5). For each (N, lambda2, clustering): the inflation curve over
+p, its knee at tolerances 1.10 and 1.50 with a bootstrap interval, and the
+knee predicted from the expected number of flat segments at s_min. On clean
+series the positive-side width is set against its theoretical value at
+every N (bias, sd, RMSE). REPS = 100 per cell.
 
-Staleness. Each interval contains a trade or not; a traded interval returns
-the whole price change accumulated since the previous trade and an untraded
-one returns exactly zero, so the price path is preserved and only the
-sampling degrades. The last interval always trades. Two inactivity schemes
-with the same stationary no-trade fraction p:
-  iid        each interval untraded independently with probability p
-  markov<L>  a two-state Markov chain whose untraded runs have mean length
-             L (leave-quiet probability 1/L, enter-quiet probability
-             p / (L (1 - p))), started from its stationary distribution.
-             Defined only for p <= 1 - 1/L, where the chain is at least as
-             clustered as iid (i.i.d. runs have mean 1 / (1 - p)); larger p
-             would make trades, not inactivity, the clustered state.
-Clustering matters because a segment is flat -- all its returns identical --
-only when all its intervals are untraded, and clustered inactivity produces
-flat segments at much lower average p.
-
-Estimators (mfdfa.py, s_min = 10, s_max = N/10):
-  width       full-range width, q in [-5, 5], flat segments excluded from
-              the negative moments (the paper's estimator)
-  width_pos   positive-side width, q in [0.5, 5]
-  h_neg5      h(-5)
-  width_ro    full-range width with exclude_flat=False, which keeps the
-              floating-point round-off residual of flat segments. Reported
-              only to document that the old pathology is a function of
-              machine precision, not a property of the data.
-
-Knee. For each (N, lambda2, clustering) the inflation curve is median width
-at p over median width at p = 0 (the p = 0 series have no staleness, so one
-baseline serves all clusterings). The knee is the smallest grid p at which
-inflation exceeds KNEE_TOL = 1.10, with a linearly interpolated crossing and
-a 90% bootstrap interval (replications resampled within each p); the knee
-at 1.50 is reported as well. `safe_p` is the largest grid p up to which
-inflation never exceeds the tolerance. The whole curve is written, so the
-knee is a summary, not the result.
-
-Predicted knee. mfdfa calls a segment of length s flat when its last s - 1
-returns are identical (a change at its first position only shifts the level
-of the profile, which the linear detrend removes). Under staleness that means
-s - 1 consecutive untraded intervals: probability p^(s-1) for iid and
-p (1 - 1/L)^(s-2) for markov<L>. With 2 floor(N/s) segments (both scan
-directions), the expected number of flat segments at s_min is
-  iid        2 floor(N/s_min) p^(s_min - 1)
-  markov<L>  2 floor(N/s_min) p (1 - 1/L)^(s_min - 2)
-and the predicted knee is the p at which that count reaches one. The
-simulated flat-segment count at s_min is recorded to check the count, and
-the predicted knee is set against both estimators' simulated knees.
-
-Informativeness. On clean series (p = 0), width_pos against lambda2 in
-{0, 0.025, ..., 0.15} at every N: medians, interquartile range, the
-theoretical width, correlation with lambda2 (of medians and pooled over
-replications) and monotonicity.
-
-Replication. REPS = 100 per cell everywhere. Every draw comes from
-np.random.SeedSequence(SEED, spawn_key=(N, 1000 lambda2, 1000 p, L, rep)),
-L = 0 for iid, so no two cells share random numbers; the p = 0 cells are
-reused by the informativeness check, which is the same draw by definition.
-
-Outputs (via klimafrac.results):
-  data/results/staleness_replications.csv   one row per simulated series
-  data/results/staleness_curves.csv         medians and inflation per cell
-  data/results/staleness_knees.csv          knee, interval and prediction
-                                            per (N, lambda2, clustering)
-  data/results/staleness_bias_table.csv     Table tab:bias (N = 20,000,
-                                            lambda2 = 0.10, iid)
-  data/results/staleness_informativeness.csv
-  data/results/staleness.json               every number the paper cites
-  figures/fig3_staleness_bias.png
---quick runs 10 replications on a coarse p grid and writes the same files
-with a _quick suffix, so a test run never replaces paper outputs. The full
-run is 56,100 series, dominated by the N = 50,000 cells, and takes roughly
-an hour to an hour and a half on the default four worker processes;
---quick takes about two minutes.
+Outputs (data/results/): staleness_replications.csv, staleness_curves.csv,
+staleness_knees.csv, staleness_bias_table.csv,
+staleness_informativeness.csv, staleness.json; figure fig3_staleness_bias,
+not in the paper. --quick runs 10 replications on a coarse grid with the
+_quick suffix; the full run takes about an hour on four workers.
 
 Usage:
-    uv run python -m klimafrac.analysis.staleness
-    uv run python -m klimafrac.analysis.staleness --reps 200 --workers 8
-    uv run python -m klimafrac.analysis.staleness --quick
+    uv run python -m klimafrac.analysis.staleness [--reps 200 --workers 8] [--quick]
 """
 
 import argparse

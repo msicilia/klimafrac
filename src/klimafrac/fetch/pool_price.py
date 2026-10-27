@@ -1,32 +1,19 @@
 """
 The pool's own price after every swap, from the logs already fetched.
 
-A swap's execution price, quote amount over base amount, is what the trader
-paid. It includes the pool's fee, so a buy and a sell at an unchanged pool
-differ by about twice the fee, and on a trade of a few raw units it is mostly
-rounding. The pair also states its reserves after every swap, in the Sync log
-it emits just before the Swap log of the same transaction. Their ratio is the
-price the pool would quote for the next infinitesimal trade: no fee, no
-rounding, and nothing here is read from the node again.
+The execution price, quote amount over base amount, includes the fee and
+the rounding of small amounts. The Sync log the pair emits just before each
+Swap carries the reserves after it; their ratio, adjusted for decimals, is
+the price the pool quotes next. For every pool whose swap file is built,
+each Swap is paired with the last Sync before it in the same transaction;
+the module fails if any swap has none.
 
-For every pool in fetch/pools.py whose swap file is built, this module finds
-each swap's Sync -- the last Sync log before the Swap log, which must sit in
-the same transaction -- and writes the reserves and their ratio, adjusted for
-the two tokens' decimals. It fails if any swap has no such Sync. These are
-the reserves fetch/swaps.py has already reconciled, event by event, against
-the amounts of every swap, mint and burn.
-
-Outputs:
-  data/pool_price_<chain>_<SYMBOL>.csv.gz   block, log_index (the swap's),
-                                            base_reserve_raw, quote_reserve_raw,
-                                            pool_price
-  data/pool_price_manifest.json             per pool: rows, the swap file it
-                                            was built against, checksums, and
-                                            how the two prices compare
+Outputs: data/pool_price_<chain>_<SYMBOL>.csv.gz (block, log_index,
+base_reserve_raw, quote_reserve_raw, pool_price),
+data/pool_price_manifest.json.
 
 Usage:
-    uv run python -m klimafrac.fetch.pool_price
-    uv run python -m klimafrac.fetch.pool_price --pool polygon_NCT
+    uv run python -m klimafrac.fetch.pool_price [--pool polygon_NCT]
 """
 
 import argparse

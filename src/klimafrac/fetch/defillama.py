@@ -1,32 +1,18 @@
 """
 DefiLlama requests, stored verbatim before anything is derived from them.
 
-DefiLlama recomputes its history, so the same request made on two dates need
-not return the same series. Every response is therefore written byte for byte
-under data/raw/defillama/<dataset>/<retrieved YYYY-MM-DD>/, with a manifest of
-the requests, and CSVs are derived only from a stored snapshot. Rebuilding
-from a snapshot needs no network.
+DefiLlama recomputes its history, so every response is written byte for
+byte under data/raw/defillama/<dataset>/<retrieved YYYY-MM-DD>/ with a
+manifest of the requests, and CSVs are derived only from a stored snapshot.
 
-Chart series (https://coins.llama.fi/chart/<coin>). Bars sit on a regular grid
-of instants start + k*step, start <= instant < 2026-07-26 00:00 UTC. A bar is
-the price point DefiLlama returns for that requested instant (searchWidth 30m
-hourly, 6h daily). The point is assigned to the instant it was requested for,
-and the run fails unless that assignment is unambiguous (offset under half a
-step) and no instant receives two points. An instant for which the vendor
-returns nothing is a missing bar: empty in the CSV, and counted and located
-in data/vendor_manifest.json. Pages are 400 hourly or 200 daily instants.
-
-A page that comes back 200 OK with an empty `coins` object is requested once
-more before being believed, because an empty page would otherwise be stored
-as a whole page of missing bars; both the retry and the outcome are recorded
-in the snapshot manifest as `empty_pages`.
-
-Snapshot choice: by default the most recent snapshot of a dataset, resumed if
-incomplete; --refresh starts a new one dated today; --snapshot YYYY-MM-DD
-rebuilds from a given one. Nothing stored is reused until the manifest's
-window end, period, search width and series specification have been checked
-against the code asking for it, so a snapshot taken under a different
-definition is never silently adopted. Every HTTP failure raises after retries.
+Chart series (https://coins.llama.fi/chart/<coin>) are requested on a
+regular grid of instants up to 2026-07-26 00:00 UTC. Each returned point is
+assigned to the instant it was requested for, the run failing if the
+assignment is ambiguous; an instant with no point is a missing bar, counted
+in data/vendor_manifest.json; an empty page is requested once more before
+being believed. By default the newest snapshot of a dataset is used or
+resumed, --refresh starts one dated today, --snapshot rebuilds from a given
+one. A snapshot taken under other request parameters is refused.
 """
 
 import argparse
