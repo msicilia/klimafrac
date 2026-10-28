@@ -55,9 +55,9 @@ def _plot_benchmark(win: pd.DataFrame, tokens: pd.DataFrame, path: str) -> None:
             y += 1
         med = float(np.median(members.width_median))
         ax.plot([med, med], [top - 0.5, y - 0.5], color=INK2, lw=0.7, ls=(0, (3, 2)), zorder=2)
-        ax.text(0.995, top - 0.7, f"{title}: median of token medians {med:.3f}, "
-                f"{len(members)} tokens", transform=ax.get_yaxis_transform(), ha="right",
-                va="bottom", color=INK2)
+        ax.text(0.995, top - 0.7, f"{title} ({len(members)}): median {med:.3f}",
+                transform=ax.get_yaxis_transform(), ha="right", va="bottom", fontsize=6.5,
+                color=INK2)
         y += 1.6
     ax.set_yticks(ticks)
     ax.set_yticklabels(labels, fontsize=6.5)
