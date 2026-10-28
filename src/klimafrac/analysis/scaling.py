@@ -24,7 +24,7 @@ from klimafrac.analysis.thin_benchmark import GROUPS
 from klimafrac.analysis.tiers import TOKENS as LADDER
 from klimafrac.mfdfa import QS_POS, fluctuation_functions
 from klimafrac.paths import PRICE, figure
-from klimafrac.plotstyle import ACCENT, INK2, plt, save, style
+from klimafrac.plotstyle import ACCENT, INK2, PAGE_WIDTH, PAPER, PAPER_DPI, plt, save, style
 from klimafrac.results import numbers, table
 
 DIAG_QS = np.arange(0.5, 5.5, 0.5)                    # the q values fitted
@@ -70,26 +70,33 @@ def series() -> list[tuple[str, str, str, np.ndarray]]:
 
 
 def plot(shown: dict, path: str) -> None:
-    fig, axes = plt.subplots(2, 3, figsize=(11, 6.4), sharex="row")
+    with plt.rc_context(PAPER):
+        _plot(shown, path)
+
+
+def _plot(shown: dict, path: str) -> None:
+    fig, axes = plt.subplots(2, 3, figsize=(PAGE_WIDTH, 3.55), sharex="row")
     for ax, (title, d) in zip(axes.ravel(), shown.items()):
         logs = np.log10(d["s"])
         for q, colour in zip(PLOTTED, ACCENT):
             j = int(np.flatnonzero(np.isclose(DIAG_QS, q))[0])
             y = np.log10(d["f"][:, j])
             slope, intercept = np.polyfit(logs, y, 1)
-            ax.plot(logs, slope * logs + intercept, color=colour, lw=1.2, zorder=2)
-            ax.scatter(logs, y, s=22, color=colour, zorder=3, label=f"$q={q:g}$")
+            ax.plot(logs, slope * logs + intercept, color=colour, lw=0.8, zorder=2)
+            ax.scatter(logs, y, s=5, color=colour, zorder=3, label=f"$q={q:g}$")
         style(ax)
-        ax.set_title(title, loc="left", fontsize=9)
+        ax.set_title(title, loc="left", fontsize=7, fontweight="normal", color=INK2,
+                     linespacing=1.3)
         ax.text(0.97, 0.05, rf"$\Delta\alpha^{{+}}={d['width']:.3f}$", transform=ax.transAxes,
-                ha="right", fontsize=9, color=INK2)
+                ha="right", fontsize=6.5, color=INK2)
     for ax in axes[:, 0]:
         ax.set_ylabel(r"$\log_{10} F_q(s)$")
     for ax in axes[1]:
         ax.set_xlabel(r"$\log_{10} s$")
-    axes[0, 0].legend(frameon=False, fontsize=8, loc="upper left")
+    axes[0, 0].legend(frameon=False, fontsize=6.5, loc="upper left", handletextpad=0.1,
+                      borderaxespad=0.2)
     fig.tight_layout()
-    save(fig, path)
+    save(fig, path, dpi=PAPER_DPI)
 
 
 def main() -> None:
@@ -131,9 +138,10 @@ def main() -> None:
                                   (("transaction", "MCO2"), "MCO2")):
         g = one[(one.clock == clock) & (one.group == group)]
         pick = g.iloc[(g.width - g.width.median()).abs().argsort().iloc[0]]
+        name = pick.token.replace("_S", " (Sushiswap)").replace("_Q", " (Quickswap)")
         detail = (f"window {pick.window}" if clock == "transaction"
-                  else f"{pick.token}, window {pick.window}")
-        shown[f"{label} ({detail})"] = drawings[(clock, group, pick.token, pick.window)]
+                  else f"{name}, window {pick.window}")
+        shown[f"{label}\n{detail}"] = drawings[(clock, group, pick.token, pick.window)]
 
     out = {"scaling.price": PRICE, "scaling.poor_below_r2": POOR}
     # Does a poor fit at the top of the customary range go with a wide window?

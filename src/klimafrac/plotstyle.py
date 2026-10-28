@@ -38,6 +38,16 @@ def style(ax, title=None, sub=None, ylabel=None):
         ax.set_ylabel(ylabel)
 
 
-def save(fig, path: str) -> None:
-    fig.savefig(path, dpi=200, bbox_inches="tight", facecolor=SURFACE)
+# The paper's figures are drawn at the width they print at (the journal's text
+# width), so that the sizes below are the sizes on the page.
+PAGE_WIDTH = 5.47                                      # inches
+PAPER = {"font.size": 7.5, "axes.labelsize": 7.5, "axes.titlesize": 7.5,
+         "xtick.labelsize": 7, "ytick.labelsize": 7, "legend.fontsize": 7,
+         "axes.linewidth": 0.6, "xtick.major.width": 0.6, "ytick.major.width": 0.6,
+         "xtick.major.size": 2.5, "ytick.major.size": 2.5}
+PAPER_DPI = 600
+
+
+def save(fig, path: str, dpi: int = 200) -> None:
+    fig.savefig(path, dpi=dpi, bbox_inches="tight", facecolor=SURFACE)
     plt.close(fig)
